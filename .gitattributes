@@ -1,0 +1,2 @@
+# Normaliza el fin de línea a LF para consistencia con los contenedores Linux.
+* text=auto eol=lf
