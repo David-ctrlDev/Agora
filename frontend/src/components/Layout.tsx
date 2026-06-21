@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Building2, FolderKanban, ListChecks, LogOut } from "lucide-react";
+import { Building2, FolderKanban, ListChecks, LogOut, Sparkles } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { useLogout, useMe } from "../auth/useAuth";
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/areas", label: "Áreas", icon: Building2 },
   { to: "/proyectos", label: "Proyectos", icon: FolderKanban },
   { to: "/tareas", label: "Tareas", icon: ListChecks },
+  { to: "/agente", label: "Agente", icon: Sparkles },
 ];
 
 function getInitials(name: string): string {

@@ -1,5 +1,8 @@
 """Modelos SQLAlchemy."""
 
+from app.models.agent_action import AgentAction
+from app.models.agent_conversation import AgentConversation
+from app.models.agent_message import AgentMessage
 from app.models.area import Area
 from app.models.github_event import GitHubEvent
 from app.models.github_repo import GitHubRepo
@@ -13,6 +16,9 @@ from app.models.user import User
 from app.models.user_area import UserArea
 
 __all__ = [
+    "AgentAction",
+    "AgentConversation",
+    "AgentMessage",
     "Area",
     "GitHubEvent",
     "GitHubRepo",

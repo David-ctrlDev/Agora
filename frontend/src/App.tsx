@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import Layout from "./components/Layout";
 import RequireAuth from "./components/RequireAuth";
+import AgentPage from "./pages/AgentPage";
 import AreasPage from "./pages/AreasPage";
 import LoginPage from "./pages/LoginPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/proyectos" element={<ProjectsPage />} />
           <Route path="/proyectos/:id" element={<ProjectDetailPage />} />
           <Route path="/tareas" element={<TasksPage />} />
+          <Route path="/agente" element={<AgentPage />} />
           <Route path="*" element={<Navigate to="/areas" replace />} />
         </Route>
       </Route>
