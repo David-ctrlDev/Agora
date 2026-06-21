@@ -15,6 +15,7 @@ import {
 } from "../api/projects";
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
+import AnalyticsPanel from "../components/AnalyticsPanel";
 import GitHubPanel from "../components/GitHubPanel";
 import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
@@ -143,6 +144,8 @@ export default function ProjectDetailPage() {
           </div>
         </Card>
       )}
+
+      <AnalyticsPanel projectId={projectId} />
 
       <TasksBoard projectId={projectId} canEdit={canEdit} users={usersQuery.data ?? []} />
 

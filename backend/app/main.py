@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.routers import (
     agent,
+    analytics,
     areas,
     auth,
     comments,
@@ -27,6 +28,7 @@ app.include_router(google.router)
 app.include_router(knowledge.router)
 app.include_router(agent.router)
 app.include_router(notifications.router)
+app.include_router(analytics.router)
 app.include_router(users.router)
 
 

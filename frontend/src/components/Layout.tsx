@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Building2, FolderKanban, ListChecks, LogOut, Sparkles } from "lucide-react";
+import { BarChart3, Bell, Building2, FolderKanban, ListChecks, LogOut, Sparkles } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { unreadCount } from "../api/notifications";
@@ -11,6 +11,7 @@ const navItems = [
   { to: "/areas", label: "Áreas", icon: Building2 },
   { to: "/proyectos", label: "Proyectos", icon: FolderKanban },
   { to: "/tareas", label: "Tareas", icon: ListChecks },
+  { to: "/analitica", label: "Analítica", icon: BarChart3 },
   { to: "/agente", label: "Agente", icon: Sparkles },
   { to: "/notificaciones", label: "Notificaciones", icon: Bell },
 ];
