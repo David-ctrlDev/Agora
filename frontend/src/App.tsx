@@ -5,6 +5,8 @@ import RequireAuth from "./components/RequireAuth";
 import AreasPage from "./pages/AreasPage";
 import LoginPage from "./pages/LoginPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
+import ProjectsPage from "./pages/ProjectsPage";
 
 export default function App() {
   return (
@@ -14,7 +16,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/areas" replace />} />
           <Route path="/areas" element={<AreasPage />} />
-          <Route path="/proyectos" element={<PlaceholderPage title="Proyectos" />} />
+          <Route path="/proyectos" element={<ProjectsPage />} />
+          <Route path="/proyectos/:id" element={<ProjectDetailPage />} />
           <Route path="/tareas" element={<PlaceholderPage title="Tareas" />} />
           <Route path="*" element={<Navigate to="/areas" replace />} />
         </Route>

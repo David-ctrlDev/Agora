@@ -1,12 +1,14 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.routers import areas, auth
+from app.routers import areas, auth, projects, users
 
 app = FastAPI(title=settings.app_name)
 
 app.include_router(auth.router)
 app.include_router(areas.router)
+app.include_router(projects.router)
+app.include_router(users.router)
 
 
 @app.get("/api/health", tags=["health"])
