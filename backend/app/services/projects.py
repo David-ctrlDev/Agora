@@ -28,6 +28,14 @@ def _to_read(project: Project, area_name: str | None, owner_name: str | None) ->
         updated_at=project.updated_at,
         area_name=area_name,
         owner_name=owner_name,
+        initiative=project.initiative,
+        proposed_by=project.proposed_by,
+        project_type=project.project_type,
+        category=project.category,
+        criticality=project.criticality,
+        process=project.process,
+        benefits=project.benefits,
+        change_management=project.change_management,
     )
 
 

@@ -17,6 +17,17 @@ class ProjectCreate(BaseModel):
     progress: int = Field(default=0, ge=0, le=100)
 
 
+class RoadmapFields(BaseModel):
+    initiative: str | None = None
+    proposed_by: str | None = None
+    project_type: str | None = None
+    category: str | None = None
+    criticality: str | None = None
+    process: str | None = None
+    benefits: str | None = None
+    change_management: str | None = None
+
+
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
@@ -25,9 +36,17 @@ class ProjectUpdate(BaseModel):
     due_date: date | None = None
     owner_id: int | None = None
     progress: int | None = Field(default=None, ge=0, le=100)
+    initiative: str | None = None
+    proposed_by: str | None = None
+    project_type: str | None = None
+    category: str | None = None
+    criticality: str | None = None
+    process: str | None = None
+    benefits: str | None = None
+    change_management: str | None = None
 
 
-class ProjectRead(BaseModel):
+class ProjectRead(RoadmapFields):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

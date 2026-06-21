@@ -12,7 +12,18 @@ export const PROJECT_STATUS: Record<string, { label: string; tone: Tone }> = {
   archived: { label: "Archivado", tone: "neutral" },
 };
 
-export interface Project {
+export interface RoadmapFields {
+  initiative: string | null;
+  proposed_by: string | null;
+  project_type: string | null;
+  category: string | null;
+  criticality: string | null;
+  process: string | null;
+  benefits: string | null;
+  change_management: string | null;
+}
+
+export interface Project extends RoadmapFields {
   id: number;
   name: string;
   description: string | null;
@@ -38,7 +49,7 @@ export interface ProjectCreate {
   progress?: number;
 }
 
-export interface ProjectUpdate {
+export interface ProjectUpdate extends Partial<RoadmapFields> {
   name?: string;
   status?: ProjectStatus;
   description?: string | null;

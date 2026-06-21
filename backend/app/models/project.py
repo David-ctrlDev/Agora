@@ -31,6 +31,15 @@ class Project(Base):
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, default="COP", server_default="COP"
     )
+    # Campos del roadmap (importados del Excel de planeación de TI).
+    initiative: Mapped[str | None] = mapped_column(String(120), nullable=True)  # proyecto padre
+    proposed_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    project_type: Mapped[str | None] = mapped_column(String(60), nullable=True)  # tipo
+    category: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    criticality: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    process: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    benefits: Mapped[str | None] = mapped_column(Text, nullable=True)
+    change_management: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutGrid, List, Plus, Search } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { listAreas } from "../api/areas";
 import {
@@ -15,20 +15,27 @@ import { Badge, Button, Card, Input, PageHeader, Select, Spinner } from "../comp
 
 const STATUS_ACCENT: Record<string, string> = {
   planned: "#94a3b8",
-  active: "#6366f1",
+  active: "#10b981",
   on_hold: "#f59e0b",
-  done: "#10b981",
+  done: "#047857",
   archived: "#cbd5e1",
 };
 const VIEW_KEY = "agora-projects-view";
+const CRIT_STYLE: Record<string, string> = {
+  ALTA: "bg-red-100 text-red-700",
+  MEDIA: "bg-amber-100 text-amber-700",
+  BAJA: "bg-slate-100 text-slate-600",
+};
 
 function fmtDate(d: string | null): string {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "2-digit" });
 }
+const dash = (v: string | null | undefined) => (v && v.trim() ? v : "—");
 
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const areasQuery = useQuery({ queryKey: ["areas"], queryFn: listAreas });
 
@@ -43,6 +50,7 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<number | "">("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("");
   const [view, setView] = useState<"cards" | "list">(
     () => (localStorage.getItem(VIEW_KEY) as "cards" | "list") || "cards",
   );
@@ -81,6 +89,11 @@ export default function ProjectsPage() {
   const areas = areasQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
 
+  const owners = useMemo(
+    () => [...new Set(projects.map((p) => p.owner_name).filter((n): n is string => !!n))].sort(),
+    [projects],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return projects.filter(
@@ -89,9 +102,10 @@ export default function ProjectsPage() {
           p.name.toLowerCase().includes(q) ||
           (p.description ?? "").toLowerCase().includes(q)) &&
         (areaFilter === "" || p.area_id === areaFilter) &&
-        (!statusFilter || p.status === statusFilter),
+        (!statusFilter || p.status === statusFilter) &&
+        (!ownerFilter || p.owner_name === ownerFilter),
     );
-  }, [projects, search, areaFilter, statusFilter]);
+  }, [projects, search, areaFilter, statusFilter, ownerFilter]);
 
   return (
     <div className="space-y-6">
@@ -191,6 +205,16 @@ export default function ProjectsPage() {
             ))}
           </Select>
         </div>
+        <div className="sm:w-48">
+          <Select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}>
+            <option value="">Todos los responsables</option>
+            {owners.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </Select>
+        </div>
         <div className="flex h-10 shrink-0 overflow-hidden rounded-lg border border-slate-300">
           <button
             type="button"
@@ -262,39 +286,92 @@ export default function ProjectsPage() {
               })}
             </div>
           ) : (
-            <Card className="divide-y divide-slate-100 overflow-hidden">
-              {filtered.map((p: Project) => {
-                const st = PROJECT_STATUS[p.status] ?? { label: p.status, tone: "neutral" as const };
-                return (
-                  <Link
-                    key={p.id}
-                    to={`/proyectos/${p.id}`}
-                    className="flex items-center gap-3 px-4 py-3 transition hover:bg-slate-50"
-                  >
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ background: STATUS_ACCENT[p.status] ?? "#cbd5e1" }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-slate-900">{p.name}</div>
-                      <div className="truncate text-xs text-slate-400">
-                        {p.area_name}
-                        {p.owner_name && ` · ${p.owner_name}`}
-                      </div>
-                    </div>
-                    <div className="hidden w-28 shrink-0 sm:block">
-                      <div className="mb-0.5 text-right text-xs tabular-nums text-slate-400">{p.progress}%</div>
-                      <div className="h-1.5 rounded-full bg-slate-100">
-                        <div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${p.progress}%` }} />
-                      </div>
-                    </div>
-                    <div className="hidden shrink-0 text-xs text-slate-400 md:block">
-                      {fmtDate(p.start_date)} → {fmtDate(p.due_date)}
-                    </div>
-                    <Badge tone={st.tone}>{st.label}</Badge>
-                  </Link>
-                );
-              })}
+            <Card className="overflow-hidden p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-3 py-2.5">Iniciativa</th>
+                      <th className="px-3 py-2.5">Proyecto</th>
+                      <th className="px-3 py-2.5">Tipo</th>
+                      <th className="px-3 py-2.5">Categoría</th>
+                      <th className="px-3 py-2.5">Criticidad</th>
+                      <th className="px-3 py-2.5">Proceso</th>
+                      <th className="px-3 py-2.5">Líder</th>
+                      <th className="px-3 py-2.5">Estado</th>
+                      <th className="px-3 py-2.5 text-right">Avance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filtered.map((p: Project) => {
+                      const st = PROJECT_STATUS[p.status] ?? { label: p.status, tone: "neutral" as const };
+                      const crit = (p.criticality ?? "").toUpperCase();
+                      return (
+                        <tr
+                          key={p.id}
+                          onClick={() => navigate(`/proyectos/${p.id}`)}
+                          className="cursor-pointer transition hover:bg-slate-50"
+                        >
+                          <td className="px-3 py-2.5">
+                            {p.initiative ? (
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
+                                {p.initiative}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{ background: STATUS_ACCENT[p.status] ?? "#cbd5e1" }}
+                              />
+                              <span
+                                className="block max-w-[280px] truncate font-medium text-slate-900"
+                                title={p.name}
+                              >
+                                {p.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-500">{dash(p.project_type)}</td>
+                          <td className="px-3 py-2.5 text-slate-500">{dash(p.category)}</td>
+                          <td className="px-3 py-2.5">
+                            {crit ? (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${CRIT_STYLE[crit] ?? "bg-slate-100 text-slate-600"}`}
+                              >
+                                {crit}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-500">{dash(p.process)}</td>
+                          <td className="px-3 py-2.5 text-slate-500">{dash(p.owner_name)}</td>
+                          <td className="px-3 py-2.5">
+                            <Badge tone={st.tone}>{st.label}</Badge>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="h-1.5 w-16 rounded-full bg-slate-100">
+                                <div
+                                  className="h-1.5 rounded-full bg-brand-500"
+                                  style={{ width: `${p.progress}%` }}
+                                />
+                              </div>
+                              <span className="w-9 text-right tabular-nums text-xs text-slate-500">
+                                {p.progress}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           )}
         </>
