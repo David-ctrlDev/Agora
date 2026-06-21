@@ -9,7 +9,7 @@ import {
   LogOut,
   Sparkles,
 } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { unreadCount } from "../api/notifications";
 import { useLogout, useMe } from "../auth/useAuth";
@@ -49,7 +49,7 @@ function ApiStatus() {
   const ok = isSuccess && !isError;
   return (
     <div className="flex items-center gap-2 text-xs text-slate-400">
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-400"}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`} />
       API {ok ? "conectada" : "sin conexión"}
     </div>
   );
@@ -59,6 +59,7 @@ export default function Layout() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
+  const location = useLocation();
   const unread = useQuery({
     queryKey: ["notif-count"],
     queryFn: unreadCount,
@@ -72,31 +73,37 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <aside className="flex w-64 flex-col border-r border-slate-200 bg-white">
-        <div className="flex items-center gap-2.5 px-6 py-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
+        <div className="flex items-center gap-2.5 px-5 py-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-sm font-bold text-white shadow-sm">
             Á
           </div>
-          <span className="text-lg font-semibold tracking-tight text-slate-900">Ágora</span>
+          <div className="leading-none">
+            <div className="text-[15px] font-semibold tracking-tight text-slate-900">Ágora</div>
+            <div className="mt-1 text-[11px] text-slate-400">Invesa</div>
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-2">
+        <div className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Plataforma
+        </div>
+        <nav className="flex-1 space-y-0.5 px-3">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                `group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
                   isActive
-                    ? "bg-brand-50 text-brand-700"
+                    ? "bg-brand-600 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`
               }
             >
-              <Icon className="h-5 w-5" strokeWidth={2} />
+              <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
               {label}
               {to === "/notificaciones" && unreadTotal > 0 && (
-                <span className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                <span className="ml-auto rounded-full bg-brand-100 px-1.5 py-0.5 text-[11px] font-semibold text-brand-700">
                   {unreadTotal}
                 </span>
               )}
@@ -104,10 +111,10 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="border-t border-slate-200 p-3">
+        <div className="space-y-2 border-t border-slate-200 p-3">
           {me.data && (
-            <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+            <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-sm font-semibold text-white">
                 {getInitials(me.data.name)}
               </div>
               <div className="min-w-0 flex-1">
@@ -120,23 +127,24 @@ export default function Layout() {
                 type="button"
                 onClick={handleLogout}
                 title="Salir"
-                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >
                 <LogOut className="h-4 w-4" />
               </button>
             </div>
           )}
-          <div className="px-1">
-            <GoogleConnect />
-          </div>
-          <div className="px-2 pt-2">
+          <GoogleConnect />
+          <div className="px-2 pt-1">
             <ApiStatus />
           </div>
         </div>
       </aside>
 
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-5xl px-8 py-10">
+        <div
+          key={location.pathname}
+          className="mx-auto max-w-6xl animate-fade-in px-6 py-8 sm:px-8"
+        >
           <Outlet />
         </div>
       </main>

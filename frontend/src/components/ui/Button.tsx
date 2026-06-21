@@ -4,13 +4,14 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 const variantClasses: Record<Variant, string> = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800",
-  secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+  primary: "bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800",
+  secondary:
+    "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50",
   ghost: "text-slate-600 hover:bg-slate-100",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+  danger: "bg-red-600 text-white shadow-sm hover:bg-red-700",
 };
 
 const sizeClasses: Record<Size, string> = {

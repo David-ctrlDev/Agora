@@ -72,7 +72,7 @@ function SprintDetail({
             <BurndownChart points={burndown.data.points} />
             <div className="flex gap-4 text-xs text-slate-500">
               <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-4 rounded" style={{ background: "#4f46e5" }} /> Real
+                <span className="inline-block h-2 w-4 rounded" style={{ background: "#059669" }} /> Real
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-0.5 w-4" style={{ background: "#cbd5e1" }} /> Ideal

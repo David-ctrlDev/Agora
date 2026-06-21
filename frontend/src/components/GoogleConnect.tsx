@@ -28,17 +28,17 @@ export default function GoogleConnect() {
         type="button"
         onClick={handleConnect}
         disabled={connect.isPending}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100 disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-60"
       >
         <Cloud className="h-4 w-4" />
-        {connect.isPending ? "Conectando…" : "Conectar Google Workspace"}
+        {connect.isPending ? "Conectando…" : "Conectar Google"}
       </button>
     );
   }
 
   return (
-    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-xs">
-      <span className="flex items-center gap-2 font-semibold text-emerald-700">
+    <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
+      <span className="flex items-center gap-2 font-medium text-emerald-700">
         <Cloud className="h-4 w-4" /> Google conectado
       </span>
       <button

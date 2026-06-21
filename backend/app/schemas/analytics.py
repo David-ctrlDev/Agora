@@ -18,6 +18,12 @@ class ProjectAnalytics(BaseModel):
     health: str
     due_date: date | None = None
     due_in_days: int | None = None
+    area_name: str | None = None
+    category: str | None = None
+    criticality: str | None = None
+    project_type: str | None = None
+    initiative: str | None = None
+    process: str | None = None
 
 
 class OverviewTotals(BaseModel):
@@ -30,6 +36,17 @@ class OverviewTotals(BaseModel):
     at_risk_projects: int
 
 
+class AreaStat(BaseModel):
+    area: str
+    projects: int
+    completion_pct: int
+    at_risk: int
+
+
 class Overview(BaseModel):
     projects: list[ProjectAnalytics]
     totals: OverviewTotals
+    by_area: list[AreaStat] = []
+    task_by_status: dict[str, int] = {}
+    project_by_status: dict[str, int] = {}
+    by_criticality: dict[str, int] = {}

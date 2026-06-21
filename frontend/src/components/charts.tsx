@@ -27,7 +27,7 @@ export function ProgressRing({
   value,
   size = 120,
   thickness = 12,
-  color = "#4f46e5",
+  color = "#059669",
 }: {
   value: number;
   size?: number;
@@ -212,7 +212,7 @@ export function BurndownChart({
           type="monotone"
           dataKey="remaining"
           name="Real"
-          stroke="#4f46e5"
+          stroke="#059669"
           strokeWidth={2.5}
           dot={false}
           connectNulls
