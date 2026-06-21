@@ -53,7 +53,12 @@ async def sync_project(
     project_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> dict[str, int]:
     project = await _project(project_id, user, db, edit=True)
-    return {"new_documents": await svc.sync_project(db, project.id, project.name)}
+    try:
+        return {"new_documents": await svc.sync_project(db, user, project.id, project.name)}
+    except svc.GoogleNotConnected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Conecta tu cuenta de Google primero"
+        ) from None
 
 
 @router.post("/projects/{project_id}/google/meetings", response_model=MeetingResult)
@@ -64,9 +69,14 @@ async def create_meeting(
     db: AsyncSession = Depends(get_db),
 ) -> MeetingResult:
     project = await _project(project_id, user, db, edit=True)
-    result = await svc.create_meeting(
-        db, project.id, payload.title, payload.attendees, payload.when
-    )
+    try:
+        result = await svc.create_meeting(
+            db, user, project.id, payload.title, payload.attendees, payload.when
+        )
+    except svc.GoogleNotConnected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Conecta tu cuenta de Google primero"
+        ) from None
     await audit.log(
         db,
         project_id=project.id,
@@ -84,3 +94,10 @@ async def list_documents(
 ) -> list:
     await _project(project_id, user, db)
     return await svc.list_documents(db, project_id)
+
+
+@router.get("/google/directory")
+async def google_directory(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> list[dict]:
+    return await svc.list_directory(db, user)

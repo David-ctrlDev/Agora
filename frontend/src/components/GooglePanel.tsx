@@ -5,11 +5,11 @@ import { useState } from "react";
 import {
   type GoogleDocument,
   createMeeting,
+  getDirectory,
   googleStatus,
   listGoogleDocuments,
   syncGoogle,
 } from "../api/google";
-import { listUsers } from "../api/users";
 import { Badge, Button, Card, Input, Spinner } from "./ui";
 
 interface Props {
@@ -49,7 +49,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
     queryKey: ["project", projectId, "google-docs"],
     queryFn: () => listGoogleDocuments(projectId),
   });
-  const usersQuery = useQuery({ queryKey: ["users"], queryFn: listUsers });
+  const directoryQuery = useQuery({ queryKey: ["google-directory"], queryFn: getDirectory });
   const connected = statusQuery.data?.connected ?? false;
 
   const [showMeeting, setShowMeeting] = useState(false);
@@ -77,7 +77,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
   const toggleAttendee = (email: string) =>
     setAttendees((a) => (a.includes(email) ? a.filter((x) => x !== email) : [...a, email]));
 
-  const people = usersQuery.data ?? [];
+  const people = directoryQuery.data ?? [];
   const q = peopleSearch.trim().toLowerCase();
   const filteredPeople = people.filter(
     (u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
@@ -184,7 +184,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
                     filteredPeople.map((u) => {
                       const selected = attendees.includes(u.email);
                       return (
-                        <li key={u.id}>
+                        <li key={u.email}>
                           <button
                             type="button"
                             onClick={() => toggleAttendee(u.email)}

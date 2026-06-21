@@ -25,6 +25,13 @@ export const syncGoogle = (projectId: number) =>
 export const listGoogleDocuments = (projectId: number) =>
   api.get<GoogleDocument[]>(`/api/projects/${projectId}/google/documents`);
 
+export interface DirectoryPerson {
+  name: string;
+  email: string;
+}
+
+export const getDirectory = () => api.get<DirectoryPerson[]>("/api/google/directory");
+
 export interface MeetingResult {
   title: string;
   meet_url: string | null;
