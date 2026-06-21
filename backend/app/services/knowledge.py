@@ -10,9 +10,24 @@ from app.rag.embeddings import get_embedding_provider
 
 
 async def ingest_document(
-    db: AsyncSession, project_id: int, title: str, content: str, source: str = "manual"
+    db: AsyncSession,
+    project_id: int,
+    title: str,
+    content: str,
+    source: str = "manual",
+    file_name: str | None = None,
+    mime_type: str | None = None,
+    file_data: bytes | None = None,
 ) -> Document:
-    document = Document(project_id=project_id, title=title.strip(), source=source)
+    document = Document(
+        project_id=project_id,
+        title=title.strip(),
+        source=source,
+        file_name=file_name,
+        mime_type=mime_type,
+        content_text=content,
+        file_data=file_data,
+    )
     db.add(document)
     await db.flush()
     provider = get_embedding_provider()

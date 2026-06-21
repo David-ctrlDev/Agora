@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class DocumentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     content: str = Field(min_length=1)
+    source: str = "manual"
 
 
 class DocumentRead(BaseModel):
@@ -15,7 +16,13 @@ class DocumentRead(BaseModel):
     project_id: int
     title: str
     source: str
+    file_name: str | None = None
+    mime_type: str | None = None
     created_at: datetime
+
+
+class DocumentDetail(DocumentRead):
+    content_text: str | None = None
 
 
 class SearchQuery(BaseModel):

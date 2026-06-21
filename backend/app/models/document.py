@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, LargeBinary, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -17,6 +17,10 @@ class Document(Base):
     )
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
+    file_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    content_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
