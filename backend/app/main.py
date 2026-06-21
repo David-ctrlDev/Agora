@@ -12,6 +12,7 @@ from app.routers import (
     knowledge,
     notifications,
     projects,
+    sprints,
     tasks,
     users,
 )
@@ -29,6 +30,7 @@ app.include_router(knowledge.router)
 app.include_router(agent.router)
 app.include_router(notifications.router)
 app.include_router(analytics.router)
+app.include_router(sprints.router)
 app.include_router(users.router)
 
 

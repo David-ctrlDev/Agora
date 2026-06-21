@@ -151,3 +151,50 @@ export function BarList({ items }: { items: Segment[] }) {
     </div>
   );
 }
+
+/** Burndown: línea ideal (punteada) vs. restante real (sólida). */
+export function BurndownChart({
+  points,
+  height = 170,
+}: {
+  points: { date: string; ideal: number; remaining: number | null }[];
+  height?: number;
+}) {
+  const width = 480;
+  const pad = { l: 26, r: 12, t: 12, b: 24 };
+  const n = points.length;
+  const maxY = Math.max(1, ...points.map((p) => Math.max(p.ideal, p.remaining ?? 0)));
+  const xAt = (i: number) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * (width - pad.l - pad.r));
+  const yAt = (v: number) => pad.t + (1 - v / maxY) * (height - pad.t - pad.b);
+  const idealPts = points.map((p, i) => `${xAt(i)},${yAt(p.ideal)}`).join(" ");
+  const realPts = points
+    .map((p, i) => (p.remaining == null ? null : `${xAt(i)},${yAt(p.remaining)}`))
+    .filter((v): v is string => v !== null)
+    .join(" ");
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
+      <line x1={pad.l} y1={pad.t} x2={pad.l} y2={height - pad.b} stroke="#e2e8f0" />
+      <line x1={pad.l} y1={height - pad.b} x2={width - pad.r} y2={height - pad.b} stroke="#e2e8f0" />
+      <text
+        x={pad.l - 6}
+        y={yAt(maxY)}
+        textAnchor="end"
+        dominantBaseline="middle"
+        style={{ fontSize: 10, fill: "#94a3b8" }}
+      >
+        {maxY}
+      </text>
+      <text
+        x={pad.l - 6}
+        y={yAt(0)}
+        textAnchor="end"
+        dominantBaseline="middle"
+        style={{ fontSize: 10, fill: "#94a3b8" }}
+      >
+        0
+      </text>
+      <polyline fill="none" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="4 4" points={idealPts} />
+      {realPts && <polyline fill="none" stroke="#4f46e5" strokeWidth={2.5} points={realPts} />}
+    </svg>
+  );
+}

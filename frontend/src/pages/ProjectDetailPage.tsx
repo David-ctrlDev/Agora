@@ -19,6 +19,7 @@ import AnalyticsPanel from "../components/AnalyticsPanel";
 import GitHubPanel from "../components/GitHubPanel";
 import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
+import SprintsPanel from "../components/SprintsPanel";
 import TasksBoard from "../components/TasksBoard";
 import { Badge, Button, Card, PageHeader, Select, Spinner } from "../components/ui";
 
@@ -146,6 +147,8 @@ export default function ProjectDetailPage() {
       )}
 
       <AnalyticsPanel projectId={projectId} />
+
+      <SprintsPanel projectId={projectId} canEdit={canEdit} />
 
       <TasksBoard projectId={projectId} canEdit={canEdit} users={usersQuery.data ?? []} />
 

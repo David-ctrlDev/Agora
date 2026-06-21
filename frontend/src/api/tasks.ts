@@ -29,6 +29,8 @@ export interface Task {
   priority: string;
   assignee_id: number | null;
   due_date: string | null;
+  sprint_id: number | null;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
   assignee_name: string | null;
@@ -42,6 +44,7 @@ export interface TaskCreate {
   priority?: TaskPriority;
   assignee_id?: number | null;
   due_date?: string | null;
+  sprint_id?: number | null;
 }
 
 export interface TaskUpdate {
@@ -51,6 +54,7 @@ export interface TaskUpdate {
   priority?: TaskPriority;
   assignee_id?: number | null;
   due_date?: string | null;
+  sprint_id?: number | null;
 }
 
 export const listProjectTasks = (projectId: number) =>

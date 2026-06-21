@@ -25,6 +25,10 @@ class Task(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    sprint_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

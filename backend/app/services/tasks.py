@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +23,8 @@ def _to_read(
         priority=task.priority,
         assignee_id=task.assignee_id,
         due_date=task.due_date,
+        sprint_id=task.sprint_id,
+        completed_at=task.completed_at,
         created_at=task.created_at,
         updated_at=task.updated_at,
         assignee_name=assignee_name,
@@ -58,6 +62,8 @@ async def create_task(db: AsyncSession, project_id: int, payload: TaskCreate) ->
         priority=payload.priority,
         assignee_id=payload.assignee_id,
         due_date=payload.due_date,
+        sprint_id=payload.sprint_id,
+        completed_at=datetime.now(timezone.utc) if payload.status == "done" else None,
     )
     db.add(task)
     await db.commit()
@@ -68,6 +74,10 @@ async def create_task(db: AsyncSession, project_id: int, payload: TaskCreate) ->
 async def update_task(db: AsyncSession, task: Task, payload: TaskUpdate) -> TaskRead:
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(task, key, value)
+    if task.status == "done" and task.completed_at is None:
+        task.completed_at = datetime.now(timezone.utc)
+    elif task.status != "done":
+        task.completed_at = None
     await db.commit()
     await db.refresh(task)
     return await _single_read(db, task)

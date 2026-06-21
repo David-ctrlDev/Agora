@@ -14,6 +14,7 @@ class TaskCreate(BaseModel):
     priority: TaskPriority = "medium"
     assignee_id: int | None = None
     due_date: date | None = None
+    sprint_id: int | None = None
 
 
 class TaskUpdate(BaseModel):
@@ -23,6 +24,7 @@ class TaskUpdate(BaseModel):
     priority: TaskPriority | None = None
     assignee_id: int | None = None
     due_date: date | None = None
+    sprint_id: int | None = None
 
 
 class TaskRead(BaseModel):
@@ -36,6 +38,8 @@ class TaskRead(BaseModel):
     priority: str
     assignee_id: int | None
     due_date: date | None
+    sprint_id: int | None = None
+    completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     assignee_name: str | None = None
