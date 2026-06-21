@@ -45,6 +45,10 @@ export default function ProjectDetailPage() {
     mutationFn: (status: ProjectStatus) => updateProject(projectId, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
   });
+  const assignOwner = useMutation({
+    mutationFn: (ownerId: number | null) => updateProject(projectId, { owner_id: ownerId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
+  });
   const addMemberMut = useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: string }) =>
       addMember(projectId, userId, role),
@@ -131,15 +135,28 @@ export default function ProjectDetailPage() {
 
       {canEdit && (
         <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Estado</h2>
-          <div className="max-w-xs">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Estado y responsable</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Select
+              label="Estado"
               value={project.status}
               onChange={(e) => updateStatus.mutate(e.target.value as ProjectStatus)}
             >
               {Object.entries(PROJECT_STATUS).map(([key, value]) => (
                 <option key={key} value={key}>
                   {value.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Responsable"
+              value={project.owner_id ?? ""}
+              onChange={(e) => assignOwner.mutate(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Sin responsable</option>
+              {(usersQuery.data ?? []).map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
                 </option>
               ))}
             </Select>

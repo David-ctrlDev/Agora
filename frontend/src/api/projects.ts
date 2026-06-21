@@ -40,6 +40,7 @@ export interface ProjectUpdate {
   status?: ProjectStatus;
   description?: string | null;
   due_date?: string | null;
+  owner_id?: number | null;
 }
 
 export interface ProjectMember {
