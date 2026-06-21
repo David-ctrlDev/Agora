@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+
+import { useLogout, useMe } from "../auth/useAuth";
 
 const navItems = [
   { to: "/areas", label: "Áreas", icon: "▦" },
@@ -27,10 +29,21 @@ function ApiStatus() {
 }
 
 export default function Layout() {
+  const me = useMe();
+  const logout = useLogout();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout.mutate(undefined, {
+      onSuccess: () => navigate("/login", { replace: true }),
+    });
+  };
+
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800">
       <aside className="flex w-60 flex-col bg-slate-900 text-slate-100">
         <div className="px-6 py-5 text-2xl font-bold tracking-tight">Ágora</div>
+
         <nav className="flex-1 space-y-1 px-3">
           {navItems.map((item) => (
             <NavLink
@@ -47,10 +60,27 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-slate-800 px-6 py-4">
+
+        <div className="space-y-3 border-t border-slate-800 px-4 py-4">
+          {me.data && (
+            <div>
+              <div className="truncate text-sm font-medium text-white">{me.data.name}</div>
+              <div className="text-xs text-slate-400">
+                {me.data.role === "admin" ? "Administrador" : "Miembro"}
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800"
+          >
+            Salir
+          </button>
           <ApiStatus />
         </div>
       </aside>
+
       <main className="flex-1 overflow-auto">
         <div className="mx-auto max-w-5xl px-8 py-8">
           <Outlet />

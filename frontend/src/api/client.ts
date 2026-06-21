@@ -1,7 +1,8 @@
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+    credentials: "include",
     ...options,
+    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
   });
 
   if (!res.ok) {
@@ -12,7 +13,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     } catch {
       // respuesta sin cuerpo JSON
     }
-    throw new Error(detail);
+    const error = new Error(detail) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
   }
 
   if (res.status === 204) return undefined as T;

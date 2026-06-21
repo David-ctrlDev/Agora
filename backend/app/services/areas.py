@@ -24,8 +24,14 @@ def slugify(value: str) -> str:
     return re.sub(r"[-\s]+", "-", value)
 
 
-async def list_areas(db: AsyncSession) -> list[Area]:
-    result = await db.execute(select(Area).order_by(Area.name))
+async def list_areas(db: AsyncSession, area_ids: list[int] | None = None) -> list[Area]:
+    """Lista áreas. Si `area_ids` es None no hay restricción (admin); si es lista, filtra."""
+    stmt = select(Area).order_by(Area.name)
+    if area_ids is not None:
+        if not area_ids:
+            return []
+        stmt = stmt.where(Area.id.in_(area_ids))
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
