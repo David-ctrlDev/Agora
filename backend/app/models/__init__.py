@@ -9,6 +9,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.github_event import GitHubEvent
 from app.models.github_repo import GitHubRepo
 from app.models.google_document import GoogleDocument
+from app.models.notification import Notification
 from app.models.oauth_token import OAuthToken
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -27,6 +28,7 @@ __all__ = [
     "GitHubEvent",
     "GitHubRepo",
     "GoogleDocument",
+    "Notification",
     "OAuthToken",
     "Project",
     "ProjectMember",

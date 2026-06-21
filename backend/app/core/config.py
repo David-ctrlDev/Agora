@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Notificaciones (Fase 6) — outbox de desarrollo (sin envío real).
     notifications_provider: str = "outbox"
+    notifications_run_token: str = ""
 
     @property
     def is_development(self) -> bool:

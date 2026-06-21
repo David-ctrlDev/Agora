@@ -75,6 +75,7 @@ DEV_TASKS: list[dict] = [
     {"project": "Renovación planta norte", "title": "Plan de obra", "status": "todo", "priority": "medium", "assignee": "ana@invesa.com"},
     {"project": "Renovación planta norte", "title": "Permisos municipales", "status": "blocked", "priority": "high"},
     {"project": "Auditoría ambiental 2026", "title": "Recopilar evidencias", "status": "in_progress", "priority": "medium", "assignee": "carlos@invesa.com", "due": date(2026, 7, 5)},
+    {"project": "Auditoría ambiental 2026", "title": "Solicitar permisos al ente", "status": "todo", "priority": "high", "assignee": "carlos@invesa.com", "due": date(2026, 6, 5)},
     {"project": "Auditoría ambiental 2026", "title": "Informe preliminar", "status": "todo", "priority": "high", "assignee": "carlos@invesa.com"},
     {"project": "Campaña comercial Q3", "title": "Definir presupuesto", "status": "todo", "priority": "medium", "assignee": "carlos@invesa.com"},
     {"project": "Migración ERP", "title": "Mapear procesos", "status": "done", "priority": "medium", "assignee": "wserna@invesa.com"},

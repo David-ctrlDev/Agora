@@ -5,6 +5,7 @@ import RequireAuth from "./components/RequireAuth";
 import AgentPage from "./pages/AgentPage";
 import AreasPage from "./pages/AreasPage";
 import LoginPage from "./pages/LoginPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import TasksPage from "./pages/TasksPage";
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/proyectos/:id" element={<ProjectDetailPage />} />
           <Route path="/tareas" element={<TasksPage />} />
           <Route path="/agente" element={<AgentPage />} />
+          <Route path="/notificaciones" element={<NotificationsPage />} />
           <Route path="*" element={<Navigate to="/areas" replace />} />
         </Route>
       </Route>

@@ -1,0 +1,41 @@
+{
+  "name": "Ágora — Detección de notificaciones",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Cada 6 horas",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/notifications/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Run-Token", "value": "dev-run-token" }]
+        },
+        "options": {}
+      },
+      "id": "http-run",
+      "name": "Ejecutar detección",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Cada 6 horas": {
+      "main": [[{ "node": "Ejecutar detección", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "comment": "Importar en n8n (perfil 'tools' de docker-compose). Llama al backend con X-Run-Token (ver NOTIFICATIONS_RUN_TOKEN en .env). El backend corre la detección de riesgos por área y registra las notificaciones."
+}

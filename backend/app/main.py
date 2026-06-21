@@ -9,6 +9,7 @@ from app.routers import (
     github,
     google,
     knowledge,
+    notifications,
     projects,
     tasks,
     users,
@@ -25,6 +26,7 @@ app.include_router(github.router)
 app.include_router(google.router)
 app.include_router(knowledge.router)
 app.include_router(agent.router)
+app.include_router(notifications.router)
 app.include_router(users.router)
 
 

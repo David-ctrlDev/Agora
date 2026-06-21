@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Building2, FolderKanban, ListChecks, LogOut, Sparkles } from "lucide-react";
+import { Bell, Building2, FolderKanban, ListChecks, LogOut, Sparkles } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
+import { unreadCount } from "../api/notifications";
 import { useLogout, useMe } from "../auth/useAuth";
 
 const navItems = [
@@ -9,6 +10,7 @@ const navItems = [
   { to: "/proyectos", label: "Proyectos", icon: FolderKanban },
   { to: "/tareas", label: "Tareas", icon: ListChecks },
   { to: "/agente", label: "Agente", icon: Sparkles },
+  { to: "/notificaciones", label: "Notificaciones", icon: Bell },
 ];
 
 function getInitials(name: string): string {
@@ -44,6 +46,12 @@ export default function Layout() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
+  const unread = useQuery({
+    queryKey: ["notif-count"],
+    queryFn: unreadCount,
+    refetchInterval: 30000,
+  });
+  const unreadTotal = unread.data?.count ?? 0;
 
   const handleLogout = () => {
     logout.mutate(undefined, { onSuccess: () => navigate("/login", { replace: true }) });
@@ -74,6 +82,11 @@ export default function Layout() {
             >
               <Icon className="h-5 w-5" strokeWidth={2} />
               {label}
+              {to === "/notificaciones" && unreadTotal > 0 && (
+                <span className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                  {unreadTotal}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
