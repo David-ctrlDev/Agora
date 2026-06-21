@@ -1,3 +1,21 @@
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  RadialBar,
+  RadialBarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 interface Segment {
   label: string;
   value: number;
@@ -16,37 +34,39 @@ export function ProgressRing({
   thickness?: number;
   color?: string;
 }) {
-  const r = (size - thickness) / 2;
-  const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, value));
-  const len = (pct / 100) * c;
+  const pct = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={thickness} />
-        {len > 0 && (
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth={thickness}
-            strokeDasharray={`${len} ${c - len}`}
-            strokeLinecap="round"
-          />
-        )}
-      </g>
-      <text
-        x={size / 2}
-        y={size / 2}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        style={{ fontSize: size * 0.26, fontWeight: 600, fill: "#0f172a" }}
+    <div style={{ position: "relative", width: size, height: size }}>
+      <RadialBarChart
+        width={size}
+        height={size}
+        cx="50%"
+        cy="50%"
+        innerRadius={size / 2 - thickness}
+        outerRadius={size / 2}
+        barSize={thickness}
+        data={[{ value: pct }]}
+        startAngle={90}
+        endAngle={-270}
+      >
+        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+        <RadialBar background dataKey="value" cornerRadius={thickness / 2} fill={color} />
+      </RadialBarChart>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: size * 0.26,
+          fontWeight: 600,
+          color: "#0f172a",
+        }}
       >
         {pct}%
-      </text>
-    </svg>
+      </div>
+    </div>
   );
 }
 
@@ -64,60 +84,50 @@ export function Donut({
   centerValue?: string;
   centerLabel?: string;
 }) {
-  const r = (size - thickness) / 2;
-  const c = 2 * Math.PI * r;
-  const total = segments.reduce((sum, s) => sum + s.value, 0);
-  let offset = 0;
+  const data = segments.filter((s) => s.value > 0);
+  const outer = size / 2;
+  const inner = outer - thickness;
+  const empty = data.length === 0;
   return (
     <div className="flex items-center gap-5">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={thickness} />
-          {total > 0 &&
-            segments.map((s, i) => {
-              if (s.value <= 0) return null;
-              const len = (s.value / total) * c;
-              const node = (
-                <circle
-                  key={i}
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={r}
-                  fill="none"
-                  stroke={s.color}
-                  strokeWidth={thickness}
-                  strokeDasharray={`${len} ${c - len}`}
-                  strokeDashoffset={-offset}
-                />
-              );
-              offset += len;
-              return node;
-            })}
-        </g>
+      <div style={{ position: "relative", width: size, height: size }}>
+        <PieChart width={size} height={size}>
+          <Pie
+            data={empty ? [{ label: "—", value: 1, color: "#f1f5f9" }] : data}
+            dataKey="value"
+            nameKey="label"
+            cx="50%"
+            cy="50%"
+            innerRadius={inner}
+            outerRadius={outer}
+            paddingAngle={data.length > 1 ? 2 : 0}
+            stroke="none"
+            isAnimationActive={false}
+          >
+            {(empty ? [{ color: "#f1f5f9" }] : data).map((s, i) => (
+              <Cell key={i} fill={s.color} />
+            ))}
+          </Pie>
+          {!empty && <Tooltip />}
+        </PieChart>
         {(centerValue !== undefined || centerLabel) && (
-          <>
-            <text
-              x={size / 2}
-              y={centerLabel ? size / 2 - 4 : size / 2}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              style={{ fontSize: 22, fontWeight: 600, fill: "#0f172a" }}
-            >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span style={{ fontSize: 22, fontWeight: 600, color: "#0f172a", lineHeight: 1 }}>
               {centerValue}
-            </text>
-            {centerLabel && (
-              <text
-                x={size / 2}
-                y={size / 2 + 16}
-                textAnchor="middle"
-                style={{ fontSize: 11, fill: "#94a3b8" }}
-              >
-                {centerLabel}
-              </text>
-            )}
-          </>
+            </span>
+            {centerLabel && <span style={{ fontSize: 11, color: "#94a3b8" }}>{centerLabel}</span>}
+          </div>
         )}
-      </svg>
+      </div>
       <ul className="space-y-1.5">
         {segments.map((s, i) => (
           <li key={i} className="flex items-center gap-2 text-sm text-slate-600">
@@ -131,70 +141,84 @@ export function Donut({
   );
 }
 
-/** Barras horizontales simples. */
+/** Barras horizontales. */
 export function BarList({ items }: { items: Segment[] }) {
-  const max = Math.max(1, ...items.map((i) => i.value));
+  const height = Math.max(44, items.length * 34);
   return (
-    <div className="space-y-2">
-      {items.map((it, i) => (
-        <div key={i} className="flex items-center gap-3 text-sm">
-          <span className="w-16 shrink-0 text-slate-500">{it.label}</span>
-          <div className="h-2 flex-1 rounded-full bg-slate-100">
-            <div
-              className="h-2 rounded-full"
-              style={{ width: `${(it.value / max) * 100}%`, background: it.color }}
-            />
-          </div>
-          <span className="w-6 text-right tabular-nums text-slate-700">{it.value}</span>
-        </div>
-      ))}
-    </div>
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart layout="vertical" data={items} margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+        <XAxis type="number" hide domain={[0, "dataMax"]} />
+        <YAxis
+          type="category"
+          dataKey="label"
+          width={64}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fontSize: 12, fill: "#64748b" }}
+        />
+        <Tooltip cursor={{ fill: "#f8fafc" }} />
+        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
+          {items.map((it, i) => (
+            <Cell key={i} fill={it.color} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
 /** Burndown: línea ideal (punteada) vs. restante real (sólida). */
 export function BurndownChart({
   points,
-  height = 170,
+  height = 180,
 }: {
   points: { date: string; ideal: number; remaining: number | null }[];
   height?: number;
 }) {
-  const width = 480;
-  const pad = { l: 26, r: 12, t: 12, b: 24 };
-  const n = points.length;
-  const maxY = Math.max(1, ...points.map((p) => Math.max(p.ideal, p.remaining ?? 0)));
-  const xAt = (i: number) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * (width - pad.l - pad.r));
-  const yAt = (v: number) => pad.t + (1 - v / maxY) * (height - pad.t - pad.b);
-  const idealPts = points.map((p, i) => `${xAt(i)},${yAt(p.ideal)}`).join(" ");
-  const realPts = points
-    .map((p, i) => (p.remaining == null ? null : `${xAt(i)},${yAt(p.remaining)}`))
-    .filter((v): v is string => v !== null)
-    .join(" ");
+  const formatDay = (value: string) => {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : String(parsed.getDate());
+  };
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
-      <line x1={pad.l} y1={pad.t} x2={pad.l} y2={height - pad.b} stroke="#e2e8f0" />
-      <line x1={pad.l} y1={height - pad.b} x2={width - pad.r} y2={height - pad.b} stroke="#e2e8f0" />
-      <text
-        x={pad.l - 6}
-        y={yAt(maxY)}
-        textAnchor="end"
-        dominantBaseline="middle"
-        style={{ fontSize: 10, fill: "#94a3b8" }}
-      >
-        {maxY}
-      </text>
-      <text
-        x={pad.l - 6}
-        y={yAt(0)}
-        textAnchor="end"
-        dominantBaseline="middle"
-        style={{ fontSize: 10, fill: "#94a3b8" }}
-      >
-        0
-      </text>
-      <polyline fill="none" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="4 4" points={idealPts} />
-      {realPts && <polyline fill="none" stroke="#4f46e5" strokeWidth={2.5} points={realPts} />}
-    </svg>
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={points} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+        <XAxis
+          dataKey="date"
+          tickFormatter={formatDay}
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
+          tickLine={false}
+          axisLine={{ stroke: "#e2e8f0" }}
+        />
+        <YAxis
+          allowDecimals={false}
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
+          tickLine={false}
+          axisLine={false}
+          width={28}
+        />
+        <Tooltip />
+        <Line
+          type="monotone"
+          dataKey="ideal"
+          name="Ideal"
+          stroke="#cbd5e1"
+          strokeDasharray="4 4"
+          strokeWidth={2}
+          dot={false}
+          isAnimationActive={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="remaining"
+          name="Real"
+          stroke="#4f46e5"
+          strokeWidth={2.5}
+          dot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }

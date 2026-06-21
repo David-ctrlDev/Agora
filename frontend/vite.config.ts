@@ -8,7 +8,14 @@ export default defineConfig({
   // Pre-optimiza las dependencias principales al arrancar para evitar el ciclo
   // "nueva dependencia descubierta -> recarga" a media sesión (que tumbaba el dev server).
   optimizeDeps: {
-    include: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "lucide-react"],
+    include: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "@tanstack/react-query",
+      "lucide-react",
+      "recharts",
+    ],
   },
   server: {
     host: true,
