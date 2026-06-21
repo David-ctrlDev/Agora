@@ -42,8 +42,26 @@ class LocalHashingEmbedding:
         return vector
 
 
+class GeminiEmbedding:
+    """Embeddings reales de Gemini, con salida a 768 dims para encajar con el esquema."""
+
+    dim = EMBEDDING_DIM
+
+    def embed(self, text: str) -> list[float]:
+        from google.genai import types
+
+        from app.agent.gemini_client import get_gemini_client
+
+        client = get_gemini_client()
+        result = client.models.embed_content(
+            model=settings.gemini_embedding_model,
+            contents=text or " ",
+            config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
+        )
+        return list(result.embeddings[0].values)
+
+
 def get_embedding_provider() -> EmbeddingProvider:
-    if settings.gemini_provider == "real":  # pragma: no cover
-        # Aquí se devolvería un proveedor que llama a text-embedding-004 de Gemini.
-        raise NotImplementedError("El proveedor real de embeddings requiere GEMINI_API_KEY.")
+    if settings.gemini_provider == "real":
+        return GeminiEmbedding()
     return LocalHashingEmbedding()

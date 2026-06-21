@@ -7,8 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import app.models  # noqa: F401  (registra todos los modelos en Base.metadata)
 from app.core import db as db_module
+from app.core.config import settings
 from app.core.db import Base, register_pgvector
 from app.main import app
+
+# Las pruebas usan siempre proveedores simulados (deterministas, sin red),
+# aunque el entorno real tenga GEMINI_PROVIDER=real.
+settings.gemini_provider = "mock"
 
 TEST_DB_URL = "postgresql+asyncpg://agora:agora@db:5432/agora_test"
 ADMIN_DB_URL = "postgresql+asyncpg://agora:agora@db:5432/postgres"

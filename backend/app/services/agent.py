@@ -4,8 +4,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent import actions, tools
+from app.agent import actions, gemini_runner, tools
 from app.agent.llm import Decision, DevAgentLLM
+from app.core.config import settings
 from app.models.agent_action import AgentAction
 from app.models.agent_conversation import AgentConversation
 from app.models.agent_message import AgentMessage
@@ -107,9 +108,44 @@ async def _run_read(db: AsyncSession, user: User, decision: Decision) -> tuple[s
     return "projects_status", await tools.projects_status(db, user)
 
 
+async def _run_gemini(
+    db: AsyncSession, user: User, conversation: AgentConversation, content: str
+) -> MessageRead:
+    history = await list_messages(db, conversation.id)
+    db.add(AgentMessage(conversation_id=conversation.id, role="user", content=content))
+    await db.flush()
+
+    text, action = await gemini_runner.run_turn(db, user, content, history)
+    assistant = AgentMessage(conversation_id=conversation.id, role="assistant", content=text)
+    db.add(assistant)
+    await db.flush()
+
+    if action is not None:
+        agent_action = AgentAction(
+            conversation_id=conversation.id,
+            message_id=assistant.id,
+            user_id=user.id,
+            action_type=action["type"],
+            params=action["params"],
+            status="pending",
+        )
+        db.add(agent_action)
+        await db.commit()
+        await db.refresh(assistant)
+        await db.refresh(agent_action)
+        return _to_message_read(assistant, agent_action)
+
+    await db.commit()
+    await db.refresh(assistant)
+    return _to_message_read(assistant)
+
+
 async def run_message(
     db: AsyncSession, user: User, conversation: AgentConversation, content: str
 ) -> MessageRead:
+    if settings.gemini_provider == "real":
+        return await _run_gemini(db, user, conversation, content)
+
     db.add(AgentMessage(conversation_id=conversation.id, role="user", content=content))
     await db.flush()
 
