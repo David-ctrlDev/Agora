@@ -51,3 +51,47 @@ export async function uploadDocument(projectId: number, file: File, title?: stri
   }
   return (await res.json()) as KnowledgeDocument;
 }
+
+export interface DocumentVersion {
+  id: number;
+  document_id: number;
+  version_no: number;
+  title: string;
+  source: string;
+  file_name: string | null;
+  mime_type: string | null;
+  created_at: string;
+}
+
+export const listVersions = (documentId: number) =>
+  api.get<DocumentVersion[]>(`/api/documents/${documentId}/versions`);
+export const versionDownloadUrl = (versionId: number) =>
+  `/api/document-versions/${versionId}/download`;
+
+export async function addDocumentVersion(
+  documentId: number,
+  file?: File,
+  content?: string,
+  title?: string,
+) {
+  const form = new FormData();
+  if (file) form.append("file", file);
+  if (content) form.append("content", content);
+  if (title) form.append("title", title);
+  const res = await fetch(`/api/documents/${documentId}/versions`, {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = (await res.json()) as { detail?: unknown };
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new Error(detail);
+  }
+  return (await res.json()) as KnowledgeDocument;
+}

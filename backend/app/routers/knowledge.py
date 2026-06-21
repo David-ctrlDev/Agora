@@ -12,9 +12,11 @@ from app.schemas.knowledge import (
     DocumentCreate,
     DocumentDetail,
     DocumentRead,
+    DocumentVersionRead,
     SearchQuery,
     SearchResult,
 )
+from app.services import audit
 from app.services import knowledge as svc
 from app.services import projects as projects_svc
 
@@ -42,9 +44,19 @@ async def create_document(
     db: AsyncSession = Depends(get_db),
 ) -> Document:
     await _project(project_id, user, db, edit=True)
-    return await svc.ingest_document(
+    document = await svc.ingest_document(
         db, project_id, payload.title, payload.content, source=payload.source
     )
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="document",
+        entity_id=document.id,
+        action="created",
+        summary=f"Documento añadido: {document.title}",
+        actor_id=user.id,
+    )
+    return document
 
 
 @router.post(
@@ -79,7 +91,7 @@ async def upload_document(
             detail="No se pudo extraer texto del archivo.",
         )
     doc_title = (title or file.filename or "Documento").strip()
-    return await svc.ingest_document(
+    document = await svc.ingest_document(
         db,
         project_id,
         doc_title,
@@ -89,6 +101,16 @@ async def upload_document(
         mime_type=file.content_type,
         file_data=data,
     )
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="document",
+        entity_id=document.id,
+        action="created",
+        summary=f"Archivo subido: {document.title}",
+        actor_id=user.id,
+    )
+    return document
 
 
 @router.get("/projects/{project_id}/documents", response_model=list[DocumentRead])
@@ -150,3 +172,101 @@ async def search(
 ) -> list:
     project_ids = await projects_svc.accessible_project_ids(db, user)
     return await svc.search(db, payload.query, project_ids)
+
+
+@router.post(
+    "/documents/{document_id}/versions",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_document_version(
+    document_id: int,
+    file: UploadFile | None = File(default=None),
+    content: str | None = Form(default=None),
+    title: str | None = Form(default=None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Document:
+    document = await svc.get_document(db, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado")
+    await _project(document.project_id, user, db, edit=True)
+
+    if file is not None:
+        data = await file.read()
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="El archivo supera el límite de 15 MB",
+            )
+        try:
+            text = extract_text(file.filename or "archivo", file.content_type, data)
+        except UnsupportedFile as exc:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+            ) from exc
+        if not text.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No se pudo extraer texto del archivo.",
+            )
+        new_doc = await svc.add_version(
+            db, document, title or document.title, text, "file",
+            file.filename, file.content_type, data, user.id,
+        )
+        await audit.log(
+            db, project_id=new_doc.project_id, entity_type="document", entity_id=new_doc.id,
+            action="version", summary=f"Nueva versión de «{new_doc.title}»", actor_id=user.id,
+        )
+        return new_doc
+
+    if content and content.strip():
+        new_doc = await svc.add_version(
+            db, document, title or document.title, content.strip(),
+            document.source, None, None, None, user.id,
+        )
+        await audit.log(
+            db, project_id=new_doc.project_id, entity_type="document", entity_id=new_doc.id,
+            action="version", summary=f"Nueva versión de «{new_doc.title}»", actor_id=user.id,
+        )
+        return new_doc
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Envía un archivo o texto para la nueva versión.",
+    )
+
+
+@router.get("/documents/{document_id}/versions", response_model=list[DocumentVersionRead])
+async def list_document_versions(
+    document_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> list:
+    document = await svc.get_document(db, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado")
+    await _project(document.project_id, user, db)
+    return await svc.list_versions(db, document_id)
+
+
+@router.get("/document-versions/{version_id}/download")
+async def download_document_version(
+    version_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> Response:
+    version = await svc.get_version(db, version_id)
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Versión no encontrada")
+    document = await svc.get_document(db, version.document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado")
+    await _project(document.project_id, user, db)
+    if version.file_data:
+        return Response(
+            content=version.file_data,
+            media_type=version.mime_type or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{version.file_name or "documento"}"'},
+        )
+    return Response(
+        content=(version.content_text or "").encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{version.title}-v{version.version_no}.txt"'},
+    )

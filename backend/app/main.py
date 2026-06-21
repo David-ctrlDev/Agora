@@ -5,6 +5,7 @@ from app.routers import (
     agent,
     analytics,
     areas,
+    audit,
     auth,
     comments,
     economics,
@@ -33,6 +34,7 @@ app.include_router(notifications.router)
 app.include_router(analytics.router)
 app.include_router(sprints.router)
 app.include_router(economics.router)
+app.include_router(audit.router)
 app.include_router(users.router)
 
 

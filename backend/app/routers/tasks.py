@@ -6,6 +6,7 @@ from app.core.deps import get_current_user
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.services import audit
 from app.services import projects as projects_svc
 from app.services import tasks as svc
 
@@ -48,7 +49,17 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ) -> TaskRead:
     await _project_with_access(project_id, user, db, edit=True)
-    return await svc.create_task(db, project_id, payload)
+    task = await svc.create_task(db, project_id, payload)
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="task",
+        entity_id=task.id,
+        action="created",
+        summary=f"Tarea creada: {task.title}",
+        actor_id=user.id,
+    )
+    return task
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead)
@@ -62,7 +73,26 @@ async def update_task(
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
     await _project_with_access(task.project_id, user, db, edit=True)
-    return await svc.update_task(db, task, payload)
+    old_status, old_assignee, old_sprint = task.status, task.assignee_id, task.sprint_id
+    updated = await svc.update_task(db, task, payload)
+    changes = []
+    if updated.status != old_status:
+        changes.append(f"estado {old_status}→{updated.status}")
+    if updated.assignee_id != old_assignee:
+        changes.append("responsable actualizado")
+    if updated.sprint_id != old_sprint:
+        changes.append("sprint actualizado")
+    if changes:
+        await audit.log(
+            db,
+            project_id=task.project_id,
+            entity_type="task",
+            entity_id=task.id,
+            action="updated",
+            summary=f"Tarea «{updated.title}»: {', '.join(changes)}",
+            actor_id=user.id,
+        )
+    return updated
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

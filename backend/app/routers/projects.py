@@ -12,6 +12,7 @@ from app.schemas.project import (
     ProjectRead,
     ProjectUpdate,
 )
+from app.services import audit
 from app.services import projects as svc
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -64,7 +65,19 @@ async def update_project(
     project = await _accessible_project(project_id, user, db)
     if not await svc.can_edit(db, user, project):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permiso de edición")
-    return await svc.update_project(db, project, payload)
+    old_status = project.status
+    read = await svc.update_project(db, project, payload)
+    if read.status != old_status:
+        await audit.log(
+            db,
+            project_id=project.id,
+            entity_type="project",
+            entity_id=project.id,
+            action="status_changed",
+            summary=f"Estado del proyecto: {old_status}→{read.status}",
+            actor_id=user.id,
+        )
+    return read
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

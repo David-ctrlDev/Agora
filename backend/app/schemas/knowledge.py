@@ -25,6 +25,19 @@ class DocumentDetail(DocumentRead):
     content_text: str | None = None
 
 
+class DocumentVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    document_id: int
+    version_no: int
+    title: str
+    source: str
+    file_name: str | None = None
+    mime_type: str | None = None
+    created_at: datetime
+
+
 class SearchQuery(BaseModel):
     query: str = Field(min_length=1, max_length=1000)
 

@@ -6,6 +6,7 @@ from app.core.deps import get_current_user
 from app.models.sprint import Sprint
 from app.models.user import User
 from app.schemas.sprint import Burndown, SprintCreate, SprintRead, SprintUpdate
+from app.services import audit
 from app.services import projects as projects_svc
 from app.services import sprints as svc
 
@@ -50,7 +51,17 @@ async def create_sprint(
     db: AsyncSession = Depends(get_db),
 ) -> SprintRead:
     await _project_access(project_id, user, db, edit=True)
-    return await svc.create_sprint(db, project_id, payload)
+    sprint = await svc.create_sprint(db, project_id, payload)
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="sprint",
+        entity_id=sprint.id,
+        action="created",
+        summary=f"Sprint creado: {sprint.name}",
+        actor_id=user.id,
+    )
+    return sprint
 
 
 @router.patch("/sprints/{sprint_id}", response_model=SprintRead)

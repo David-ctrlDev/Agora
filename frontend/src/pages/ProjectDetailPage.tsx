@@ -16,6 +16,7 @@ import {
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
 import AnalyticsPanel from "../components/AnalyticsPanel";
+import AuditPanel from "../components/AuditPanel";
 import EconomicsPanel from "../components/EconomicsPanel";
 import GitHubPanel from "../components/GitHubPanel";
 import GooglePanel from "../components/GooglePanel";
@@ -160,6 +161,8 @@ export default function ProjectDetailPage() {
       <GooglePanel projectId={projectId} canEdit={canEdit} />
 
       <KnowledgePanel projectId={projectId} canEdit={canEdit} />
+
+      <AuditPanel projectId={projectId} />
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-semibold text-slate-700">Miembros</h2>

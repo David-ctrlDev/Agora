@@ -3,12 +3,15 @@ import { BookOpen, Download, Eye, FileText, Plus, Trash2, Upload } from "lucide-
 import { type FormEvent, useRef, useState } from "react";
 
 import {
+  addDocumentVersion,
   createDocument,
   deleteDocument,
   documentDownloadUrl,
   getDocument,
   listDocuments,
+  listVersions,
   uploadDocument,
+  versionDownloadUrl,
 } from "../api/knowledge";
 import { Badge, Button, Card, Input, Modal, Select, Spinner, Textarea } from "./ui";
 
@@ -63,6 +66,22 @@ export default function KnowledgePanel({ projectId, canEdit }: Props) {
     queryKey: ["document", previewId],
     queryFn: () => getDocument(previewId as number),
     enabled: previewId != null,
+  });
+  const versions = useQuery({
+    queryKey: ["document", previewId, "versions"],
+    queryFn: () => listVersions(previewId as number),
+    enabled: previewId != null,
+  });
+  const versionFileRef = useRef<HTMLInputElement>(null);
+  const addVersion = useMutation({
+    mutationFn: (file: File) => addDocumentVersion(previewId as number, file),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["document", previewId] });
+      queryClient.invalidateQueries({ queryKey: ["document", previewId, "versions"] });
+      setError(null);
+    },
+    onError: (e: Error) => setError(e.message),
   });
 
   const docs = docsQuery.data ?? [];
@@ -204,9 +223,64 @@ export default function KnowledgePanel({ projectId, canEdit }: Props) {
         {preview.isLoading ? (
           <Spinner label="Cargando…" />
         ) : (
-          <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words text-sm text-slate-700">
-            {preview.data?.content_text || "Sin texto disponible."}
-          </pre>
+          <div className="space-y-4">
+            <pre className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+              {preview.data?.content_text || "Sin texto disponible."}
+            </pre>
+            <div className="border-t border-slate-100 pt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Versiones anteriores
+                </p>
+                {canEdit && (
+                  <>
+                    <input
+                      ref={versionFileRef}
+                      type="file"
+                      accept={ACCEPT}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) addVersion.mutate(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => versionFileRef.current?.click()}
+                      disabled={addVersion.isPending}
+                    >
+                      <Upload className="h-4 w-4" />{" "}
+                      {addVersion.isPending ? "Subiendo…" : "Nueva versión"}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {versions.data && versions.data.length > 0 ? (
+                <ul className="space-y-1">
+                  {versions.data.map((v) => (
+                    <li key={v.id} className="flex items-center gap-2 text-sm">
+                      <Badge tone="neutral">v{v.version_no}</Badge>
+                      <span className="flex-1 truncate text-slate-600">{v.title}</span>
+                      <span className="text-xs text-slate-400">
+                        {new Date(v.created_at).toLocaleDateString("es-CO")}
+                      </span>
+                      <a
+                        href={versionDownloadUrl(v.id)}
+                        title="Descargar versión"
+                        className="text-slate-400 transition hover:text-slate-700"
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-400">Solo existe la versión actual.</p>
+              )}
+            </div>
+          </div>
         )}
       </Modal>
     </Card>
