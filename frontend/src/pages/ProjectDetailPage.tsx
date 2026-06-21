@@ -16,6 +16,7 @@ import {
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
 import AnalyticsPanel from "../components/AnalyticsPanel";
+import EconomicsPanel from "../components/EconomicsPanel";
 import GitHubPanel from "../components/GitHubPanel";
 import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
@@ -147,6 +148,8 @@ export default function ProjectDetailPage() {
       )}
 
       <AnalyticsPanel projectId={projectId} />
+
+      <EconomicsPanel projectId={projectId} canEdit={canEdit} />
 
       <SprintsPanel projectId={projectId} canEdit={canEdit} />
 

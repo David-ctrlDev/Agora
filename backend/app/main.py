@@ -7,6 +7,7 @@ from app.routers import (
     areas,
     auth,
     comments,
+    economics,
     github,
     google,
     knowledge,
@@ -31,6 +32,7 @@ app.include_router(agent.router)
 app.include_router(notifications.router)
 app.include_router(analytics.router)
 app.include_router(sprints.router)
+app.include_router(economics.router)
 app.include_router(users.router)
 
 
