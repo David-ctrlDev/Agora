@@ -15,6 +15,7 @@ import {
 } from "../api/projects";
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
+import GitHubPanel from "../components/GitHubPanel";
 import TasksBoard from "../components/TasksBoard";
 import { Badge, Button, Card, PageHeader, Select, Spinner } from "../components/ui";
 
@@ -142,6 +143,8 @@ export default function ProjectDetailPage() {
       )}
 
       <TasksBoard projectId={projectId} canEdit={canEdit} users={usersQuery.data ?? []} />
+
+      <GitHubPanel projectId={projectId} canEdit={canEdit} />
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-semibold text-slate-700">Miembros</h2>

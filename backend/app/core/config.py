@@ -19,9 +19,24 @@ class Settings(BaseSettings):
     session_cookie_samesite: str = "lax"
     session_max_age_seconds: int = 604800
 
-    # Login (se usará con Google OAuth en la Fase 3)
+    # Login (Google OAuth, Fase 3)
     google_allowed_hd: str = "invesa.com"
     bootstrap_admin_emails: str = ""
+
+    # Integraciones externas — proveedor "mock" (sin red) o "real" (con credenciales).
+    github_provider: str = "mock"
+    github_webhook_secret: str = ""
+    google_provider: str = "mock"
+    gemini_provider: str = "mock"
+    gemini_api_key: str = ""
+    gemini_chat_model: str = "gemini-2.0-flash"
+    gemini_embedding_model: str = "text-embedding-004"
+
+    # Cifrado en reposo de tokens OAuth (Fernet). Vacío => se usa una clave derivada de SECRET_KEY (solo dev).
+    token_encryption_key: str = ""
+
+    # Notificaciones (Fase 6) — outbox de desarrollo (sin envío real).
+    notifications_provider: str = "outbox"
 
     @property
     def is_development(self) -> bool:
