@@ -51,7 +51,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "project_summary", "description": "Resumen de un proyecto concreto, por su nombre.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "knowledge_search", "description": "Busca en los documentos/base de conocimiento de los proyectos del usuario.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
     {"name": "create_project", "description": "Crea un proyecto en un área del usuario.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}}, "required": ["name"]}},
-    {"name": "create_task", "description": "Crea una tarea dentro de un proyecto.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}}, "required": ["title"]}},
+    {"name": "create_task", "description": "Crea una tarea dentro de un proyecto.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}, "assignee": {"type": "string", "description": "Nombre o correo del responsable, o 'mí' para el usuario actual."}}, "required": ["title"]}},
     {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (opcional)"}}, "required": ["title"]}},
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
@@ -78,7 +78,11 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "create_project":
         return {"name": args.get("name", "Nuevo proyecto"), "area_name": args.get("area_name", "")}
     if name == "create_task":
-        return {"title": args.get("title", "Nueva tarea"), "project_name": args.get("project_name", "")}
+        return {
+            "title": args.get("title", "Nueva tarea"),
+            "project_name": args.get("project_name", ""),
+            "assignee": args.get("assignee", ""),
+        }
     if name == "update_task":
         return {"title": args.get("title", ""), "status": args.get("status", "done")}
     if name == "assign_task":

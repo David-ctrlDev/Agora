@@ -1,4 +1,5 @@
 """Ejecución de acciones del agente (con efecto externo). Solo tras confirmación."""
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 
@@ -6,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.google.factory import get_google_provider
 from app.models.user import User
+
+
+def _norm(text: str) -> str:
+    """Minúsculas sin acentos, para comparaciones tolerantes (Renovación ≈ renovacion)."""
+    decomposed = unicodedata.normalize("NFKD", (text or "").lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).strip()
 
 
 def execute_create_meeting(params: dict[str, Any]) -> dict[str, Any]:
@@ -41,11 +48,11 @@ async def execute_create_project(db: AsyncSession, user: User, params: dict[str,
     from app.services import projects as projects_svc
 
     areas = await auth_service.accessible_areas(db, user)
-    wanted = (params.get("area_name") or "").strip().lower()
+    wanted = _norm(params.get("area_name") or "")
     area = None
     if wanted:
         area = next(
-            (a for (a, _) in areas if wanted in a.name.lower() or a.slug == wanted), None
+            (a for (a, _) in areas if wanted in _norm(a.name) or _norm(a.slug) == wanted), None
         )
     if area is None and len(areas) == 1:
         area = areas[0][0]
@@ -62,6 +69,34 @@ async def execute_create_project(db: AsyncSession, user: User, params: dict[str,
     except projects_svc.AreaNotAllowed:
         return {"ok": False, "error": "no tienes permiso en esa área."}
     return {"ok": True, "project_id": project.id, "name": project.name, "area": area.name}
+
+
+_SELF_WORDS = {"mí", "mi", "yo", "yo mismo", "me", "self", "a mí", "a mi"}
+
+
+async def _resolve_assignee(db: AsyncSession, user: User, who: str | None) -> int | None:
+    """Resuelve un responsable por «mí», nombre o correo. None si no aplica."""
+    if not who:
+        return None
+    from sqlalchemy import func, or_, select
+
+    needle = who.strip().lower()
+    first_name = user.name.split()[0].lower() if user.name else ""
+    if (
+        needle in _SELF_WORDS
+        or needle == user.name.lower()
+        or needle == user.email.lower()
+        or needle == first_name
+    ):
+        return user.id
+    found = (
+        await db.execute(
+            select(User)
+            .where(or_(func.lower(User.name).contains(needle), func.lower(User.email).contains(needle)))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return found.id if found else None
 
 
 async def execute_create_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
@@ -83,18 +118,29 @@ async def execute_create_task(db: AsyncSession, user: User, params: dict[str, An
             .order_by(func.length(Project.name).desc())
         )
     ).scalars().all()
-    wanted = (params.get("project_name") or "").strip().lower()
+    wanted = _norm(params.get("project_name") or "")
     project = None
     if wanted:
-        project = next((p for p in rows if wanted in p.name.lower()), None)
+        project = next((p for p in rows if wanted in _norm(p.name)), None)
     if project is None and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
     if not await projects_svc.can_edit(db, user, project):
         return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
-    task = await tasks_svc.create_task(db, project.id, TaskCreate(title=params.get("title", "Nueva tarea")))
-    return {"ok": True, "task_id": task.id, "title": task.title, "project": project.name}
+    assignee_id = await _resolve_assignee(db, user, params.get("assignee"))
+    task = await tasks_svc.create_task(
+        db,
+        project.id,
+        TaskCreate(title=params.get("title", "Nueva tarea"), assignee_id=assignee_id),
+    )
+    return {
+        "ok": True,
+        "task_id": task.id,
+        "title": task.title,
+        "project": project.name,
+        "assignee": task.assignee_name,
+    }
 
 
 async def _find_task(db: AsyncSession, user: User, title: str):
@@ -115,10 +161,10 @@ async def _find_task(db: AsyncSession, user: User, title: str):
             .order_by(func.length(Task.title).desc())
         )
     ).all()
-    wanted = (title or "").strip().lower()
+    wanted = _norm(title or "")
     if not wanted:
         return None
-    return next(((t, p) for (t, p) in rows if wanted in t.title.lower()), None)
+    return next(((t, p) for (t, p) in rows if wanted in _norm(t.title)), None)
 
 
 async def execute_update_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:

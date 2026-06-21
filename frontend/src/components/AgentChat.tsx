@@ -137,7 +137,12 @@ export default function AgentChat({ className = "" }: { className?: string }) {
     },
     onSuccess: invalidate,
   });
-  const confirm = useMutation({ mutationFn: confirmAction, onSuccess: invalidate });
+  // Tras ejecutar una acción del agente, refrescamos todo (tareas, proyectos,
+  // analítica, inicio…) para que el cambio se vea sin recargar.
+  const confirm = useMutation({
+    mutationFn: confirmAction,
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
   const cancel = useMutation({ mutationFn: cancelAction, onSuccess: invalidate });
 
   useEffect(() => {

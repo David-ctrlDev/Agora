@@ -240,12 +240,16 @@ class DevAgentLLM:
         )
 
     def compose_task_proposal(self, args: dict[str, Any]) -> str:
-        project = args["project_name"] or "(proyecto no indicado)"
-        return (
-            "Voy a crear esta tarea (requiere tu confirmación):\n"
-            f"• Título: {args['title']}\n• Proyecto: {project}\n"
-            "Pulsa «Confirmar» para crearla."
-        )
+        project = args.get("project_name") or "(proyecto no indicado)"
+        lines = [
+            "Voy a crear esta tarea (requiere tu confirmación):",
+            f"• Título: {args.get('title', '')}",
+            f"• Proyecto: {project}",
+        ]
+        if args.get("assignee"):
+            lines.append(f"• Responsable: {args['assignee']}")
+        lines.append("Pulsa «Confirmar» para crearla.")
+        return "\n".join(lines)
 
     def compose_meeting_result(self, result: dict[str, Any]) -> str:
         return f"✅ Reunión creada: «{result['title']}». Enlace de Meet: {result['meet_url']}"
@@ -262,7 +266,8 @@ class DevAgentLLM:
     def compose_task_result(self, result: dict[str, Any]) -> str:
         if not result.get("ok"):
             return f"No pude crear la tarea: {result.get('error', 'error desconocido')}"
-        return f"✅ Tarea «{result['title']}» creada en {result['project']}."
+        who = f" y asignada a {result['assignee']}" if result.get("assignee") else ""
+        return f"✅ Tarea «{result['title']}» creada en {result['project']}{who}."
 
     def compose_update_task_proposal(self, args: dict[str, Any]) -> str:
         return (
