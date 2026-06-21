@@ -13,13 +13,20 @@ from app.services import tasks as tasks_svc
 router = APIRouter(prefix="/api/tasks", tags=["comments"])
 
 
-async def _task_with_access(task_id: int, user: User, db: AsyncSession) -> Task:
+async def _task_with_access(
+    task_id: int, user: User, db: AsyncSession, *, edit: bool = False
+) -> Task:
     task = await tasks_svc.get_task(db, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
     project = await projects_svc.get_project(db, task.project_id)
     if project is None or not await projects_svc.can_access(db, user, project):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
+    if edit and not await projects_svc.can_edit(db, user, project):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo quien participa del proyecto puede comentar",
+        )
     return task
 
 
@@ -40,5 +47,5 @@ async def add_comment(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CommentRead:
-    await _task_with_access(task_id, user, db)
+    await _task_with_access(task_id, user, db, edit=True)
     return await svc.add_comment(db, task_id, user.id, payload.body)

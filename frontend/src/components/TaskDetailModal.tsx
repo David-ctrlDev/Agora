@@ -137,25 +137,27 @@ export default function TaskDetailModal({ task, canEdit, users, onClose }: Props
               )}
             </ul>
           )}
-          <div className="mt-3 space-y-2">
-            <Textarea
-              rows={2}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Escribe un comentario…"
-            />
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (comment.trim()) addCommentMut.mutate();
-                }}
-                disabled={!comment.trim() || addCommentMut.isPending}
-              >
-                Comentar
-              </Button>
+          {canEdit && (
+            <div className="mt-3 space-y-2">
+              <Textarea
+                rows={2}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Escribe un comentario…"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (comment.trim()) addCommentMut.mutate();
+                  }}
+                  disabled={!comment.trim() || addCommentMut.isPending}
+                >
+                  Comentar
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </Modal>
