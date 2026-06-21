@@ -1,9 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ShieldCheck } from "lucide-react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { type DevUser, devLogin, listDevUsers } from "../api/auth";
 import { useMe } from "../auth/useAuth";
+import { Badge, Card, Spinner } from "../components/ui";
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -24,19 +36,32 @@ export default function LoginPage() {
   }, [me.data, navigate]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-3xl font-bold text-slate-900">Ágora</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Plataforma de gestión de proyectos · Invesa
-        </p>
-
-        <div className="mt-6 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          Modo desarrollo — entra como un usuario de prueba. El login con Google llegará en la Fase 3.
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-4">
+      <Card className="w-full max-w-md p-8">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
+            Á
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Ágora</h1>
+            <p className="text-sm text-slate-500">Gestión de proyectos · Invesa</p>
+          </div>
         </div>
 
-        <div className="mt-6 space-y-2">
-          {devUsers.isLoading && <p className="text-sm text-slate-500">Cargando usuarios…</p>}
+        <div className="mb-5 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Modo desarrollo — entra como un usuario de prueba. El acceso con Google llegará en la
+            Fase 3.
+          </span>
+        </div>
+
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Entrar como
+        </p>
+
+        <div className="space-y-2">
+          {devUsers.isLoading && <Spinner label="Cargando usuarios…" />}
           {devUsers.isError && (
             <p className="text-sm text-red-600">No se pudo cargar la lista de usuarios.</p>
           )}
@@ -46,24 +71,23 @@ export default function LoginPage() {
               type="button"
               onClick={() => login.mutate(user.id)}
               disabled={login.isPending}
-              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left transition hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50"
+              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-brand-300 hover:bg-brand-50/40 disabled:opacity-50"
             >
-              <span className="min-w-0">
-                <span className="block font-medium text-slate-900">{user.name}</span>
-                <span className="block truncate text-xs text-slate-500">{user.email}</span>
-              </span>
-              <span className="flex shrink-0 flex-col items-end gap-1">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    user.role === "admin"
-                      ? "bg-indigo-100 text-indigo-700"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {user.role === "admin" ? "Admin" : "Miembro"}
-                </span>
-                <span className="text-xs text-slate-400">{user.areas.join(", ")}</span>
-              </span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                {getInitials(user.name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-medium text-slate-900">{user.name}</span>
+                  <Badge tone={user.role === "admin" ? "brand" : "neutral"}>
+                    {user.role === "admin" ? "Admin" : "Miembro"}
+                  </Badge>
+                </div>
+                <div className="truncate text-xs text-slate-500">{user.email}</div>
+                <div className="mt-0.5 truncate text-xs text-slate-400">
+                  {user.areas.join(" · ")}
+                </div>
+              </div>
             </button>
           ))}
         </div>
@@ -71,7 +95,7 @@ export default function LoginPage() {
         {login.isError && (
           <p className="mt-3 text-sm text-red-600">{(login.error as Error).message}</p>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

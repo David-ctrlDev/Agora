@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { type Area, createArea, listAreas } from "../api/areas";
 import { useMe } from "../auth/useAuth";
+import { Badge, Button, Card, Input, PageHeader, Spinner } from "../components/ui";
 
 export default function AreasPage() {
   const queryClient = useQueryClient();
@@ -32,73 +34,59 @@ export default function AreasPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Áreas</h1>
-        <p className="text-sm text-slate-500">
-          {isAdmin
+      <PageHeader
+        title="Áreas"
+        description={
+          isAdmin
             ? "Departamentos de Invesa. Como administrador ves y gestionas todas."
-            : "Áreas a las que perteneces."}
-        </p>
-      </header>
+            : "Áreas a las que perteneces."
+        }
+      />
 
       {isAdmin && (
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-        >
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Nueva área
-          </h2>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <label className="flex-1">
-              <span className="mb-1 block text-sm font-medium text-slate-700">Nombre</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="p. ej. Recursos Humanos"
-                maxLength={120}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-              />
-            </label>
-            <label className="flex-1">
-              <span className="mb-1 block text-sm font-medium text-slate-700">
-                Descripción <span className="font-normal text-slate-400">(opcional)</span>
-              </span>
-              <input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Breve descripción"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={!name.trim() || create.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+        <Card className="p-5">
+          <h2 className="mb-4 text-sm font-semibold text-slate-700">Nueva área</h2>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <Input
+              label="Nombre"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="p. ej. Recursos Humanos"
+              maxLength={120}
+            />
+            <Input
+              label="Descripción (opcional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Breve descripción"
+            />
+            <Button type="submit" disabled={!name.trim() || create.isPending} className="shrink-0">
+              <Plus className="h-4 w-4" />
               {create.isPending ? "Creando…" : "Crear área"}
-            </button>
-          </div>
+            </Button>
+          </form>
           {create.isError && (
             <p className="mt-3 text-sm text-red-600">{(create.error as Error).message}</p>
           )}
-        </form>
+        </Card>
       )}
 
       <section>
-        {areasQuery.isLoading && <p className="text-sm text-slate-500">Cargando áreas…</p>}
+        {areasQuery.isLoading && <Spinner label="Cargando áreas…" />}
         {areasQuery.isError && (
           <p className="text-sm text-red-600">No se pudieron cargar las áreas.</p>
         )}
         {areasQuery.data?.length === 0 && (
-          <p className="text-sm text-slate-500">
-            {isAdmin ? "Aún no hay áreas. Crea la primera arriba." : "No perteneces a ningún área todavía."}
-          </p>
+          <Card className="p-8 text-center text-sm text-slate-500">
+            {isAdmin
+              ? "Aún no hay áreas. Crea la primera arriba."
+              : "No perteneces a ningún área todavía."}
+          </Card>
         )}
         {areasQuery.data && areasQuery.data.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <Card className="overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-3 font-medium">Área</th>
                   <th className="px-5 py-3 font-medium">Slug</th>
@@ -108,7 +96,7 @@ export default function AreasPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {areasQuery.data.map((area: Area) => (
-                  <tr key={area.id} className="hover:bg-slate-50">
+                  <tr key={area.id} className="transition hover:bg-slate-50">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-900">{area.name}</div>
                       {area.description && (
@@ -121,15 +109,9 @@ export default function AreasPage() {
                       </code>
                     </td>
                     <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                          area.is_active
-                            ? "bg-green-100 text-green-700"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
+                      <Badge tone={area.is_active ? "success" : "neutral"}>
                         {area.is_active ? "Activa" : "Inactiva"}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-5 py-3 text-slate-500">
                       {new Date(area.created_at).toLocaleDateString("es-CO")}
@@ -138,7 +120,7 @@ export default function AreasPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         )}
       </section>
     </div>

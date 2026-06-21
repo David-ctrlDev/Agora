@@ -3,7 +3,7 @@
 # ── Base: Node + pnpm (via corepack) ───────────────────────────────
 FROM node:22-slim AS base
 ENV PNPM_HOME=/pnpm PATH="/pnpm:$PATH"
-RUN corepack enable
+RUN corepack enable && pnpm config set store-dir /pnpm/store --global
 WORKDIR /app
 
 # ── Dependencias ───────────────────────────────────────────────────
