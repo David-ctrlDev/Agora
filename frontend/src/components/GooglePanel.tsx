@@ -1,8 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Cloud, FileText, RefreshCw } from "lucide-react";
+import { Calendar, Cloud, FileText, RefreshCw, Video } from "lucide-react";
+import { useState } from "react";
 
-import { type GoogleDocument, googleStatus, listGoogleDocuments, syncGoogle } from "../api/google";
-import { Badge, Button, Card, Spinner } from "./ui";
+import {
+  type GoogleDocument,
+  createMeeting,
+  googleStatus,
+  listGoogleDocuments,
+  syncGoogle,
+} from "../api/google";
+import { Badge, Button, Card, Input, Spinner } from "./ui";
 
 interface Props {
   projectId: number;
@@ -41,12 +48,34 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
     queryKey: ["project", projectId, "google-docs"],
     queryFn: () => listGoogleDocuments(projectId),
   });
-
   const connected = statusQuery.data?.connected ?? false;
-  const sync = useMutation({
-    mutationFn: () => syncGoogle(projectId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["project", projectId, "google-docs"] }),
+
+  const [showMeeting, setShowMeeting] = useState(false);
+  const [title, setTitle] = useState("");
+  const [attendees, setAttendees] = useState("");
+  const [when, setWhen] = useState("");
+
+  const invalidateDocs = () =>
+    queryClient.invalidateQueries({ queryKey: ["project", projectId, "google-docs"] });
+
+  const sync = useMutation({ mutationFn: () => syncGoogle(projectId), onSuccess: invalidateDocs });
+  const meeting = useMutation({
+    mutationFn: () =>
+      createMeeting(projectId, {
+        title: title.trim(),
+        attendees: attendees
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        when: when || null,
+      }),
+    onSuccess: () => {
+      invalidateDocs();
+      setShowMeeting(false);
+      setTitle("");
+      setAttendees("");
+      setWhen("");
+    },
   });
 
   const docs = docsQuery.data ?? [];
@@ -67,13 +96,16 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
 
       {!connected ? (
         <p className="text-sm text-slate-400">
-          Conecta tu cuenta de Google desde la barra lateral para sincronizar Drive y Calendar de
-          este proyecto.
+          Conecta tu cuenta de Google desde la barra lateral para crear reuniones y traer archivos
+          de Drive de este proyecto.
         </p>
       ) : (
         <>
           {canEdit && (
-            <div className="mb-4">
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => setShowMeeting((s) => !s)}>
+                <Video className="h-4 w-4" /> Crear reunión
+              </Button>
               <Button
                 size="sm"
                 variant="secondary"
@@ -81,8 +113,58 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
                 disabled={sync.isPending}
               >
                 <RefreshCw className="h-4 w-4" />
-                {sync.isPending ? "Sincronizando…" : "Sincronizar Drive y Calendar"}
+                {sync.isPending ? "Trayendo…" : "Traer datos de Drive"}
               </Button>
+            </div>
+          )}
+
+          {meeting.isSuccess && meeting.data && (
+            <div className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              ✅ Reunión «{meeting.data.title}» creada.{" "}
+              {meeting.data.meet_url && (
+                <a
+                  href={meeting.data.meet_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium underline"
+                >
+                  Abrir en Meet
+                </a>
+              )}
+            </div>
+          )}
+
+          {showMeeting && canEdit && (
+            <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <Input
+                label="Título"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Reunión de seguimiento"
+                maxLength={200}
+              />
+              <Input
+                label="Invitados (correos separados por coma)"
+                value={attendees}
+                onChange={(e) => setAttendees(e.target.value)}
+                placeholder="ana@invesa.com, carlos@invesa.com"
+              />
+              <Input label="Fecha" type="date" value={when} onChange={(e) => setWhen(e.target.value)} />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setShowMeeting(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => meeting.mutate()}
+                  disabled={!title.trim() || meeting.isPending}
+                >
+                  {meeting.isPending ? "Creando…" : "Crear reunión"}
+                </Button>
+              </div>
+              {meeting.isError && (
+                <p className="text-sm text-red-600">{(meeting.error as Error).message}</p>
+              )}
             </div>
           )}
 
@@ -90,7 +172,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
             <Spinner label="Cargando…" />
           ) : docs.length === 0 ? (
             <p className="text-sm text-slate-400">
-              Sin documentos. Sincroniza para traer archivos de Drive y eventos de Calendar.
+              Sin documentos. Usa «Traer datos de Drive» para sincronizar archivos y eventos.
             </p>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2">

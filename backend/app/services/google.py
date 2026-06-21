@@ -116,6 +116,41 @@ async def sync_project(db: AsyncSession, project_id: int, project_name: str) -> 
     return new
 
 
+async def create_meeting(
+    db: AsyncSession,
+    project_id: int,
+    title: str,
+    attendees: list[str],
+    when: str | None,
+) -> dict[str, object]:
+    provider = get_google_provider()
+    if when:
+        try:
+            starts_at = datetime.fromisoformat(when)
+        except ValueError:
+            starts_at = datetime.now(timezone.utc) + timedelta(days=1)
+        if starts_at.tzinfo is None:
+            if starts_at.hour == 0 and starts_at.minute == 0:
+                starts_at = starts_at.replace(hour=15)
+            starts_at = starts_at.replace(tzinfo=timezone.utc)
+    else:
+        starts_at = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+            hour=15, minute=0, second=0, microsecond=0
+        )
+    clean_attendees = [a.strip() for a in attendees if a.strip()]
+    event = provider.create_meeting(title.strip(), clean_attendees, starts_at)
+    await _upsert_doc(
+        db, project_id, "calendar", event.external_id, event.title, "event", event.web_url, event.starts_at
+    )
+    await db.commit()
+    return {
+        "title": event.title,
+        "meet_url": event.meet_url,
+        "web_url": event.web_url,
+        "starts_at": event.starts_at,
+    }
+
+
 async def list_documents(db: AsyncSession, project_id: int) -> list[GoogleDocument]:
     result = await db.execute(
         select(GoogleDocument)

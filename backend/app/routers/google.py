@@ -6,7 +6,8 @@ from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.project import Project
 from app.models.user import User
-from app.schemas.google import GoogleDocumentRead, GoogleStatus
+from app.schemas.google import GoogleDocumentRead, GoogleStatus, MeetingCreate, MeetingResult
+from app.services import audit
 from app.services import google as svc
 from app.services import projects as projects_svc
 
@@ -53,6 +54,28 @@ async def sync_project(
 ) -> dict[str, int]:
     project = await _project(project_id, user, db, edit=True)
     return {"new_documents": await svc.sync_project(db, project.id, project.name)}
+
+
+@router.post("/projects/{project_id}/google/meetings", response_model=MeetingResult)
+async def create_meeting(
+    project_id: int,
+    payload: MeetingCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MeetingResult:
+    project = await _project(project_id, user, db, edit=True)
+    result = await svc.create_meeting(
+        db, project.id, payload.title, payload.attendees, payload.when
+    )
+    await audit.log(
+        db,
+        project_id=project.id,
+        entity_type="meeting",
+        action="created",
+        summary=f"Reunión creada: {result['title']}",
+        actor_id=user.id,
+    )
+    return MeetingResult(**result)
 
 
 @router.get("/projects/{project_id}/google/documents", response_model=list[GoogleDocumentRead])

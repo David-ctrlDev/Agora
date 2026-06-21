@@ -23,3 +23,15 @@ export const syncGoogle = (projectId: number) =>
   api.post<{ new_documents: number }>(`/api/projects/${projectId}/google/sync`, {});
 export const listGoogleDocuments = (projectId: number) =>
   api.get<GoogleDocument[]>(`/api/projects/${projectId}/google/documents`);
+
+export interface MeetingResult {
+  title: string;
+  meet_url: string | null;
+  web_url: string;
+  starts_at: string;
+}
+
+export const createMeeting = (
+  projectId: number,
+  payload: { title: string; attendees: string[]; when?: string | null },
+) => api.post<MeetingResult>(`/api/projects/${projectId}/google/meetings`, payload);
