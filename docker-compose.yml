@@ -23,6 +23,10 @@ services:
       context: ./backend
       target: dev
     restart: unless-stopped
+    # Aplica migraciones y (en dev) siembra datos antes de arrancar uvicorn.
+    # (al fijar entrypoint, compose limpia el CMD de la imagen: lo damos explícito)
+    entrypoint: ["sh", "/app/docker-entrypoint.sh"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     env_file: .env
     ports:
       - "${BACKEND_PORT:-8000}:8000"

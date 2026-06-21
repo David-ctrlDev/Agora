@@ -123,6 +123,12 @@ Detección proactiva de riesgos y resúmenes: por ejemplo "proyecto sin activida
 5. **RAG**: embeddings de documentos en pgvector.
 6. **Notificaciones proactivas**: detección de riesgos y resúmenes automáticos.
 
+> **Estado de implementación (2026-06-20):** las fases 1–6 están implementadas de
+> forma autocontenida, con **proveedores mock** para lo externo (sin red): ver
+> `docs/decisions/0005-proveedores-mock.md`. El acceso usa un **login de desarrollo**;
+> Google OAuth real, GitHub App real y Gemini real quedan tras interfaz, activables
+> por configuración + credenciales.
+
 ## 10. Seguridad y gobernanza
 
 - **Datos a Gemini.** El contenido enviado al LLM sale a un tercero (Google). Minimiza PII en los prompts y pendiente confirmar política interna de Invesa antes de enviar contenido sensible al RAG.

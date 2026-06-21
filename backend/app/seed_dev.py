@@ -18,6 +18,13 @@ from app.models.user import User
 from app.models.user_area import UserArea
 from app.services.knowledge import ingest_document
 
+DEV_AREAS: list[dict] = [
+    {"name": "Producción", "slug": "produccion", "description": "Procesos productivos y planta"},
+    {"name": "Ambiental", "slug": "ambiental", "description": "Gestión ambiental y cumplimiento"},
+    {"name": "Comercial", "slug": "comercial", "description": "Ventas y relación con clientes"},
+    {"name": "IT", "slug": "it", "description": "Sistemas y desarrollo"},
+]
+
 DEV_USERS: list[dict] = [
     {"email": "wserna@invesa.com", "name": "Wilder Serna", "role": "admin", "areas": []},
     {
@@ -117,6 +124,11 @@ DEV_DOCS: list[dict] = [
 
 async def main() -> None:
     async with SessionLocal() as db:
+        existing_slugs = {a.slug for a in (await db.execute(select(Area))).scalars().all()}
+        for spec in DEV_AREAS:
+            if spec["slug"] not in existing_slugs:
+                db.add(Area(name=spec["name"], slug=spec["slug"], description=spec["description"]))
+        await db.flush()
         areas = {a.slug: a for a in (await db.execute(select(Area))).scalars().all()}
 
         for spec in DEV_USERS:
