@@ -1,4 +1,4 @@
-"""Siembra datos de desarrollo (usuarios, áreas-membresías, proyectos). Solo local.
+"""Siembra datos de desarrollo (usuarios, membresías, proyectos, tareas). Solo local.
 
 Uso: docker compose exec backend python -m app.seed_dev
 Idempotente: omite lo que ya existe.
@@ -12,6 +12,7 @@ from app.core.db import SessionLocal
 from app.models.area import Area
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.task import Task
 from app.models.user import User
 from app.models.user_area import UserArea
 
@@ -67,41 +68,46 @@ DEV_PROJECTS: list[dict] = [
     },
 ]
 
+DEV_TASKS: list[dict] = [
+    {"project": "Renovación planta norte", "title": "Cotizar maquinaria", "status": "in_progress", "priority": "high", "assignee": "ana@invesa.com", "due": date(2026, 7, 10)},
+    {"project": "Renovación planta norte", "title": "Plan de obra", "status": "todo", "priority": "medium", "assignee": "ana@invesa.com"},
+    {"project": "Renovación planta norte", "title": "Permisos municipales", "status": "blocked", "priority": "high"},
+    {"project": "Auditoría ambiental 2026", "title": "Recopilar evidencias", "status": "in_progress", "priority": "medium", "assignee": "carlos@invesa.com", "due": date(2026, 7, 5)},
+    {"project": "Auditoría ambiental 2026", "title": "Informe preliminar", "status": "todo", "priority": "high", "assignee": "carlos@invesa.com"},
+    {"project": "Campaña comercial Q3", "title": "Definir presupuesto", "status": "todo", "priority": "medium", "assignee": "carlos@invesa.com"},
+    {"project": "Migración ERP", "title": "Mapear procesos", "status": "done", "priority": "medium", "assignee": "wserna@invesa.com"},
+    {"project": "Migración ERP", "title": "Plan de migración", "status": "blocked", "priority": "high", "assignee": "wserna@invesa.com"},
+]
+
 
 async def main() -> None:
     async with SessionLocal() as db:
         areas = {a.slug: a for a in (await db.execute(select(Area))).scalars().all()}
 
         for spec in DEV_USERS:
-            existing = (
+            if (
                 await db.execute(select(User).where(User.email == spec["email"]))
-            ).scalar_one_or_none()
-            if existing is not None:
+            ).scalar_one_or_none() is not None:
                 continue
             user = User(email=spec["email"], name=spec["name"], role=spec["role"])
             db.add(user)
             await db.flush()
             for slug, role in spec["areas"]:
-                area = areas.get(slug)
-                if area is not None:
+                if (area := areas.get(slug)) is not None:
                     db.add(UserArea(user_id=user.id, area_id=area.id, area_role=role))
         await db.flush()
 
         users = {u.email: u for u in (await db.execute(select(User))).scalars().all()}
 
-        created_projects = 0
         for spec in DEV_PROJECTS:
             area = areas.get(spec["area"])
             if area is None:
                 continue
-            existing = (
+            if (
                 await db.execute(
-                    select(Project).where(
-                        Project.name == spec["name"], Project.area_id == area.id
-                    )
+                    select(Project).where(Project.name == spec["name"], Project.area_id == area.id)
                 )
-            ).scalar_one_or_none()
-            if existing is not None:
+            ).scalar_one_or_none() is not None:
                 continue
             owner = users.get(spec["owner"])
             project = Project(
@@ -120,10 +126,36 @@ async def main() -> None:
                 member = users.get(email)
                 if member is not None and (owner is None or member.id != owner.id):
                     db.add(ProjectMember(project_id=project.id, user_id=member.id, role=role))
-            created_projects += 1
+        await db.flush()
+
+        projects = {p.name: p for p in (await db.execute(select(Project))).scalars().all()}
+
+        created_tasks = 0
+        for spec in DEV_TASKS:
+            project = projects.get(spec["project"])
+            if project is None:
+                continue
+            if (
+                await db.execute(
+                    select(Task).where(Task.project_id == project.id, Task.title == spec["title"])
+                )
+            ).scalar_one_or_none() is not None:
+                continue
+            assignee = users.get(spec["assignee"]) if spec.get("assignee") else None
+            db.add(
+                Task(
+                    project_id=project.id,
+                    title=spec["title"],
+                    status=spec.get("status", "todo"),
+                    priority=spec.get("priority", "medium"),
+                    assignee_id=assignee.id if assignee else None,
+                    due_date=spec.get("due"),
+                )
+            )
+            created_tasks += 1
 
         await db.commit()
-        print(f"Seed completado. Proyectos creados: {created_projects}")
+        print(f"Seed completado. Tareas creadas: {created_tasks}")
 
 
 if __name__ == "__main__":

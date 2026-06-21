@@ -15,6 +15,7 @@ import {
 } from "../api/projects";
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
+import TasksBoard from "../components/TasksBoard";
 import { Badge, Button, Card, PageHeader, Select, Spinner } from "../components/ui";
 
 export default function ProjectDetailPage() {
@@ -74,6 +75,11 @@ export default function ProjectDetailPage() {
   const st = PROJECT_STATUS[project.status] ?? { label: project.status, tone: "neutral" as const };
   const isOwnerOrAdmin = me.data?.role === "admin" || me.data?.id === project.owner_id;
   const members = membersQuery.data ?? [];
+  const canEdit =
+    isOwnerOrAdmin ||
+    members.some(
+      (m) => m.user_id === me.data?.id && (m.role === "owner" || m.role === "editor"),
+    );
   const memberIds = new Set(members.map((m) => m.user_id));
   const candidateUsers = (usersQuery.data ?? []).filter((u) => !memberIds.has(u.id));
 
@@ -117,7 +123,7 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {isOwnerOrAdmin && (
+      {canEdit && (
         <Card className="p-5">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Estado</h2>
           <div className="max-w-xs">
@@ -134,6 +140,8 @@ export default function ProjectDetailPage() {
           </div>
         </Card>
       )}
+
+      <TasksBoard projectId={projectId} canEdit={canEdit} users={usersQuery.data ?? []} />
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-semibold text-slate-700">Miembros</h2>
@@ -178,11 +186,7 @@ export default function ProjectDetailPage() {
                 </option>
               ))}
             </Select>
-            <Select
-              label="Rol"
-              value={newMemberRole}
-              onChange={(e) => setNewMemberRole(e.target.value)}
-            >
+            <Select label="Rol" value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
               <option value="editor">editor</option>
               <option value="viewer">viewer</option>
             </Select>
@@ -199,10 +203,6 @@ export default function ProjectDetailPage() {
             </Button>
           </div>
         )}
-      </Card>
-
-      <Card className="p-8 text-center text-sm text-slate-400">
-        Tareas del proyecto — próximamente.
       </Card>
     </div>
   );

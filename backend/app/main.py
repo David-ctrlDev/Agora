@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.routers import areas, auth, projects, users
+from app.routers import areas, auth, projects, tasks, users
 
 app = FastAPI(title=settings.app_name)
 
 app.include_router(auth.router)
 app.include_router(areas.router)
 app.include_router(projects.router)
+app.include_router(tasks.router)
 app.include_router(users.router)
 
 
