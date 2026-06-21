@@ -77,3 +77,26 @@ async def test_agent_creates_project_and_task(client, session):
     task_confirmed = await client.post(f"/api/agent/actions/{task_action['id']}/confirm")
     assert "Tarea" in task_confirmed.json()["content"]
 
+
+async def test_agent_advances_task(client, session):
+    area = await create_area(session, "IT", "it")
+    admin = await create_user(session, "admin@invesa.com", "Admin", role="admin")
+    await login(client, admin.id)
+    pid = (await client.post("/api/projects", json={"name": "P", "area_id": area.id})).json()["id"]
+    tid = (
+        await client.post(f"/api/projects/{pid}/tasks", json={"title": "Cotizar maquinaria"})
+    ).json()["id"]
+    conv = (await client.post("/api/agent/conversations", json={})).json()["id"]
+
+    msg = await client.post(
+        f"/api/agent/conversations/{conv}/messages",
+        json={"content": "marca la tarea Cotizar maquinaria como hecha"},
+    )
+    action = msg.json()["action"]
+    assert action["action_type"] == "update_task"
+    confirmed = await client.post(f"/api/agent/actions/{action['id']}/confirm")
+    assert "done" in confirmed.json()["content"]
+
+    tasks = (await client.get(f"/api/projects/{pid}/tasks")).json()
+    assert next(t for t in tasks if t["id"] == tid)["status"] == "done"
+

@@ -12,33 +12,32 @@ export default function GoogleConnect() {
   const connect = useMutation({ mutationFn: googleConnect, onSuccess: invalidate });
   const disconnect = useMutation({ mutationFn: googleDisconnect, onSuccess: invalidate });
 
+  if (!connected) {
+    return (
+      <button
+        type="button"
+        onClick={() => connect.mutate()}
+        disabled={connect.isPending}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100 disabled:opacity-60"
+      >
+        <Cloud className="h-4 w-4" />
+        {connect.isPending ? "Conectando…" : "Conectar Google Workspace"}
+      </button>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-2">
-      <span className="flex items-center gap-2 text-xs text-slate-600">
-        <Cloud className="h-4 w-4 text-slate-400" />
-        Google
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-slate-300"}`}
-        />
+    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-xs">
+      <span className="flex items-center gap-2 font-semibold text-emerald-700">
+        <Cloud className="h-4 w-4" /> Google conectado
       </span>
-      {connected ? (
-        <button
-          type="button"
-          onClick={() => disconnect.mutate()}
-          className="text-xs text-slate-400 transition hover:text-red-600"
-        >
-          desconectar
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => connect.mutate()}
-          disabled={connect.isPending}
-          className="text-xs font-medium text-brand-600 transition hover:underline"
-        >
-          conectar
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => disconnect.mutate()}
+        className="text-emerald-600/70 transition hover:text-red-600"
+      >
+        desconectar
+      </button>
     </div>
   );
 }

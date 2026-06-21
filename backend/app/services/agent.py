@@ -13,12 +13,21 @@ from app.models.user import User
 from app.schemas.agent import ActionRead, MessageRead
 
 _llm = DevAgentLLM()
-_ACTION_INTENTS = {"create_meeting", "send_email", "create_project", "create_task"}
+_ACTION_INTENTS = {
+    "create_meeting",
+    "send_email",
+    "create_project",
+    "create_task",
+    "update_task",
+    "assign_task",
+}
 _PROPOSAL_COMPOSERS = {
     "create_meeting": _llm.compose_meeting_proposal,
     "send_email": _llm.compose_email_proposal,
     "create_project": _llm.compose_project_proposal,
     "create_task": _llm.compose_task_proposal,
+    "update_task": _llm.compose_update_task_proposal,
+    "assign_task": _llm.compose_assign_task_proposal,
 }
 
 
@@ -151,6 +160,14 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_create_task(db, user, action.params)
         text = _llm.compose_task_result(result)
+    elif action.action_type == "update_task":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_update_task(db, user, action.params)
+        text = _llm.compose_update_task_result(result)
+    elif action.action_type == "assign_task":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_assign_task(db, user, action.params)
+        text = _llm.compose_assign_task_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."

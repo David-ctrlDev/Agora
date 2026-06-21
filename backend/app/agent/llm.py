@@ -24,6 +24,13 @@ class DevAgentLLM:
         m = message.lower()
         wants_create = any(k in m for k in _CREATE_VERBS)
 
+        if "tarea" in m and any(k in m for k in ["asigna", "asignar", "asígna", "asignale", "asignále"]):
+            return Decision("assign_task", self._assign_args(message))
+        if "tarea" in m and any(
+            k in m
+            for k in ["marca", "marcar", "avanza", "avanzar", "completa", "completar", "termina", "finaliza", "mueve", "cambia", "pon"]
+        ):
+            return Decision("update_task", self._update_task_args(message))
         if wants_create and "tarea" in m:
             return Decision("create_task", self._task_args(message))
         if wants_create and "proyecto" in m:
@@ -125,6 +132,28 @@ class DevAgentLLM:
             if m2:
                 title = m2.group(1).strip()
         return {"title": title.rstrip(".")[:300], "project_name": project.rstrip(".")}
+
+    def _update_task_args(self, message: str) -> dict[str, Any]:
+        m = message.lower()
+        status = "done"
+        if any(k in m for k in ["en progreso", "progreso", "empez", "inicia"]):
+            status = "in_progress"
+        elif any(k in m for k in ["bloquea", "bloqueada", "bloqueado"]):
+            status = "blocked"
+        elif any(k in m for k in ["por hacer", "pendiente", "todo"]):
+            status = "todo"
+        match = re.search(r"tarea\s+(.+?)(?:\s+como\b|\s+a\b|\s+en\b|$)", message, re.IGNORECASE)
+        title = match.group(1).strip().rstrip(".") if match else ""
+        return {"title": title[:300], "status": status}
+
+    def _assign_args(self, message: str) -> dict[str, Any]:
+        match = re.search(r"tarea\s+(.+?)\s+a\s+(.+)", message, re.IGNORECASE)
+        if match:
+            return {
+                "title": match.group(1).strip().rstrip(".")[:300],
+                "assignee": match.group(2).strip().rstrip("."),
+            }
+        return {"title": "", "assignee": ""}
 
     # --- redacción ---
     def compose_projects_status(self, data: list[dict[str, Any]]) -> str:
@@ -234,3 +263,27 @@ class DevAgentLLM:
         if not result.get("ok"):
             return f"No pude crear la tarea: {result.get('error', 'error desconocido')}"
         return f"✅ Tarea «{result['title']}» creada en {result['project']}."
+
+    def compose_update_task_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a actualizar esta tarea (requiere tu confirmación):\n"
+            f"• Tarea: {args['title'] or '(no identificada)'}\n• Nuevo estado: {args['status']}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_update_task_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude actualizar la tarea: {result.get('error', 'error desconocido')}"
+        return f"✅ Tarea «{result['title']}» → {result['status']} ({result['project']})."
+
+    def compose_assign_task_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a asignar esta tarea (requiere tu confirmación):\n"
+            f"• Tarea: {args['title'] or '(no identificada)'}\n• Responsable: {args['assignee'] or '(no indicado)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_assign_task_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude asignar la tarea: {result.get('error', 'error desconocido')}"
+        return f"✅ Tarea «{result['title']}» asignada a {result['assignee']} ({result['project']})."

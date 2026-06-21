@@ -95,3 +95,71 @@ async def execute_create_task(db: AsyncSession, user: User, params: dict[str, An
         return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
     task = await tasks_svc.create_task(db, project.id, TaskCreate(title=params.get("title", "Nueva tarea")))
     return {"ok": True, "task_id": task.id, "title": task.title, "project": project.name}
+
+
+async def _find_task(db: AsyncSession, user: User, title: str):
+    from sqlalchemy import func, select
+
+    from app.models.project import Project
+    from app.models.task import Task
+    from app.services import projects as projects_svc
+
+    project_ids = await projects_svc.accessible_project_ids(db, user)
+    if not project_ids:
+        return None
+    rows = (
+        await db.execute(
+            select(Task, Project)
+            .join(Project, Project.id == Task.project_id)
+            .where(Task.project_id.in_(project_ids))
+            .order_by(func.length(Task.title).desc())
+        )
+    ).all()
+    wanted = (title or "").strip().lower()
+    if not wanted:
+        return None
+    return next(((t, p) for (t, p) in rows if wanted in t.title.lower()), None)
+
+
+async def execute_update_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    from app.schemas.task import TaskUpdate
+    from app.services import projects as projects_svc
+    from app.services import tasks as tasks_svc
+
+    found = await _find_task(db, user, params.get("title", ""))
+    if found is None:
+        return {"ok": False, "error": f"no encontré la tarea «{params.get('title', '')}»."}
+    task, project = found
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
+    updated = await tasks_svc.update_task(db, task, TaskUpdate(status=params.get("status", "done")))
+    return {"ok": True, "title": updated.title, "status": updated.status, "project": project.name}
+
+
+async def execute_assign_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    from sqlalchemy import func, or_, select
+
+    from app.schemas.task import TaskUpdate
+    from app.services import projects as projects_svc
+    from app.services import tasks as tasks_svc
+
+    found = await _find_task(db, user, params.get("title", ""))
+    if found is None:
+        return {"ok": False, "error": f"no encontré la tarea «{params.get('title', '')}»."}
+    task, project = found
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
+    who = (params.get("assignee") or "").strip().lower()
+    assignee = None
+    if who:
+        assignee = (
+            await db.execute(
+                select(User)
+                .where(or_(func.lower(User.name).contains(who), func.lower(User.email).contains(who)))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if assignee is None:
+        return {"ok": False, "error": f"no encontré al usuario «{params.get('assignee', '')}»."}
+    await tasks_svc.update_task(db, task, TaskUpdate(assignee_id=assignee.id))
+    return {"ok": True, "title": task.title, "assignee": assignee.name, "project": project.name}
