@@ -1,11 +1,15 @@
+import re
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.integrations.github.base import GitHubActivityEvent
 from app.integrations.github.factory import get_github_provider
 from app.models.github_event import GitHubEvent
 from app.models.github_repo import GitHubRepo
+from app.models.project import Project
 
 
 class RepoAlreadyLinked(Exception):
@@ -86,6 +90,32 @@ async def list_project_activity(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+def _repo_slug(name: str, project_id: int) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "proyecto"
+    return f"invesa/{base[:40]}-{project_id}"
+
+
+async def ensure_repo_for_project(db: AsyncSession, project: Project) -> None:
+    """Crea/vincula un repositorio para el proyecto de forma transparente (sin UI).
+
+    El usuario no ve Git/GitHub; solo el historial de versiones de documentos. Un
+    fallo aquí nunca debe romper la creación del proyecto.
+    """
+    if not settings.github_autocreate_repo:
+        return
+    try:
+        if await list_repos(db, project.id):
+            return
+        provider = get_github_provider()
+        full_name = _repo_slug(project.name, project.id)
+        creator = getattr(provider, "create_repo", None)
+        if creator is not None:
+            full_name = creator(full_name) or full_name
+        await link_repo(db, project.id, full_name)
+    except Exception:
+        await db.rollback()
 
 
 async def store_webhook_event(

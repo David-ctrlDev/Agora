@@ -14,6 +14,8 @@ from app.main import app
 # Las pruebas usan siempre proveedores simulados (deterministas, sin red),
 # aunque el entorno real tenga GEMINI_PROVIDER=real.
 settings.gemini_provider = "mock"
+# El alta automática de repositorio se prueba aparte; no en cada proyecto de test.
+settings.github_autocreate_repo = False
 
 TEST_DB_URL = "postgresql+asyncpg://agora:agora@db:5432/agora_test"
 ADMIN_DB_URL = "postgresql+asyncpg://agora:agora@db:5432/postgres"

@@ -100,6 +100,10 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
     db.add(ProjectMember(project_id=project.id, user_id=user.id, role="owner"))
     await db.commit()
     await db.refresh(project)
+    # Se crea un repositorio por debajo (sin UI); el usuario solo verá versiones de documentos.
+    from app.services import github as github_svc
+
+    await github_svc.ensure_repo_for_project(db, project)
     return await to_read(db, project)
 
 

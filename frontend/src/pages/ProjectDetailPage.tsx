@@ -18,7 +18,6 @@ import { useMe } from "../auth/useAuth";
 import AnalyticsPanel from "../components/AnalyticsPanel";
 import AuditPanel from "../components/AuditPanel";
 import EconomicsPanel from "../components/EconomicsPanel";
-import GitHubPanel from "../components/GitHubPanel";
 import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
 import SprintsPanel from "../components/SprintsPanel";
@@ -155,8 +154,6 @@ export default function ProjectDetailPage() {
       <SprintsPanel projectId={projectId} canEdit={canEdit} />
 
       <TasksBoard projectId={projectId} canEdit={canEdit} users={usersQuery.data ?? []} />
-
-      <GitHubPanel projectId={projectId} canEdit={canEdit} />
 
       <GooglePanel projectId={projectId} canEdit={canEdit} />
 

@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # Integraciones externas — proveedor "mock" (sin red) o "real" (con credenciales).
     github_provider: str = "mock"
     github_webhook_secret: str = ""
+    # Al crear un proyecto se crea/vincula un repositorio de forma transparente (sin UI).
+    github_autocreate_repo: bool = True
     google_provider: str = "mock"
     gemini_provider: str = "mock"
     gemini_api_key: str = ""
