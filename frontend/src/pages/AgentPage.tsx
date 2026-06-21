@@ -8,7 +8,7 @@ export default function AgentPage() {
         title="Agente"
         description="Pregunta por el estado de tus proyectos o pídele acciones (crear proyectos, tareas, reuniones, correos). Las acciones requieren tu confirmación."
       />
-      <div className="h-[62vh] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="h-[64vh] overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
         <AgentChat className="h-full" />
       </div>
     </div>

@@ -19,14 +19,19 @@ from app.schemas.agent import MessageRead
 
 _dev = DevAgentLLM()  # reutilizamos sus plantillas de propuesta (deterministas)
 
-SYSTEM = (
-    "Eres el asistente de Ágora, la plataforma interna de gestión de proyectos de Invesa. "
-    "Respondes en español, claro y conciso. Usa las herramientas para consultar datos reales; "
-    "están acotadas a las áreas del usuario, así que nunca inventes proyectos, tareas ni cifras. "
-    "Para acciones con efecto (crear proyecto o tarea, crear reunión, enviar correo, cambiar o "
-    "asignar tareas) llama a la herramienta correspondiente: el sistema pedirá confirmación al "
-    "usuario antes de ejecutarla. Si falta un dato esencial, pídelo en lugar de inventarlo."
-)
+def _system(user: User) -> str:
+    return (
+        "Eres el asistente de Ágora, la plataforma interna de gestión de proyectos de Invesa. "
+        f"El usuario actual es {user.name} ({user.email}), con rol {user.role}. "
+        "Responde en español, claro y conciso, usando Markdown cuando ayude (listas, negritas). "
+        "Usa las herramientas para consultar datos reales; están acotadas a las áreas del usuario, "
+        "así que nunca inventes proyectos, tareas ni cifras. Si preguntan por «mis tareas» o «qué "
+        "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
+        "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
+        "tarea, crear reunión, enviar correo, cambiar o asignar tareas) llama a la herramienta "
+        "correspondiente: el sistema pedirá confirmación antes de ejecutarla. Responde SIEMPRE de "
+        "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
+    )
 
 _ACTION_TOOLS = {
     "create_project",
@@ -40,6 +45,8 @@ _ACTION_TOOLS = {
 _FUNCTION_DECLARATIONS = [
     {"name": "projects_status", "description": "Estado de los proyectos del usuario: tareas abiertas y vencidas.", "parameters": {"type": "object", "properties": {}}},
     {"name": "overdue_tasks", "description": "Lista las tareas vencidas en los proyectos del usuario.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "my_tasks", "description": "Tareas abiertas asignadas al usuario actual.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "tasks_by_assignee", "description": "Tareas asignadas a una persona (por nombre o correo).", "parameters": {"type": "object", "properties": {"person": {"type": "string"}}, "required": ["person"]}},
     {"name": "recent_activity", "description": "Actividad reciente del repositorio vinculado a los proyectos.", "parameters": {"type": "object", "properties": {}}},
     {"name": "project_summary", "description": "Resumen de un proyecto concreto, por su nombre.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "knowledge_search", "description": "Busca en los documentos/base de conocimiento de los proyectos del usuario.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
@@ -94,6 +101,10 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
 async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any]) -> Any:
     if name == "overdue_tasks":
         return await tools.overdue_tasks(db, user)
+    if name == "my_tasks":
+        return await tools.my_tasks(db, user)
+    if name == "tasks_by_assignee":
+        return await tools.tasks_by_assignee(db, user, args.get("person", ""))
     if name == "recent_activity":
         return await tools.recent_activity(db, user)
     if name == "project_summary":
@@ -115,9 +126,10 @@ async def run_turn(
         contents.append(types.Content(role=role, parts=[types.Part.from_text(text=message.content)]))
     contents.append(types.Content(role="user", parts=[types.Part.from_text(text=content)]))
 
-    config = types.GenerateContentConfig(system_instruction=SYSTEM, tools=_TOOLS, temperature=0)
+    system = _system(user)
+    config = types.GenerateContentConfig(system_instruction=system, tools=_TOOLS, temperature=0)
 
-    for _ in range(5):
+    for _ in range(6):
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=settings.gemini_chat_model,
@@ -147,4 +159,12 @@ async def run_turn(
             )
         )
 
-    return "No pude completar la solicitud con la información disponible.", None
+    # Forzar una respuesta final en texto con el contexto ya recogido (sin más herramientas).
+    final = await asyncio.to_thread(
+        client.models.generate_content,
+        model=settings.gemini_chat_model,
+        contents=contents,
+        config=types.GenerateContentConfig(system_instruction=system, temperature=0),
+    )
+    text = (final.text or "").strip()
+    return (text or "Revisé tus proyectos pero no encontré nada concreto para responder."), None

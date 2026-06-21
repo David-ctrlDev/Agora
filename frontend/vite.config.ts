@@ -15,6 +15,8 @@ export default defineConfig({
       "@tanstack/react-query",
       "lucide-react",
       "recharts",
+      "react-markdown",
+      "remark-gfm",
     ],
   },
   server: {

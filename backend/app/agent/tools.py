@@ -154,3 +154,59 @@ async def knowledge_search(db: AsyncSession, user: User, query: str) -> list[dic
 
     project_ids = await _accessible_project_ids(db, user)
     return await knowledge_service.search(db, query, project_ids, k=4)
+
+
+def _task_row(task: Task, project_name: str) -> dict[str, Any]:
+    return {
+        "title": task.title,
+        "project": project_name,
+        "status": task.status,
+        "priority": task.priority,
+        "due_date": task.due_date.isoformat() if task.due_date else None,
+    }
+
+
+async def my_tasks(db: AsyncSession, user: User, limit: int = 25) -> list[dict[str, Any]]:
+    """Tareas abiertas asignadas al usuario actual."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return []
+    rows = (
+        await db.execute(
+            select(Task, Project.name)
+            .join(Project, Project.id == Task.project_id)
+            .where(Task.project_id.in_(pids), Task.assignee_id == user.id, Task.status != "done")
+            .order_by(Task.due_date.is_(None), Task.due_date)
+            .limit(limit)
+        )
+    ).all()
+    return [_task_row(t, pn) for (t, pn) in rows]
+
+
+async def tasks_by_assignee(db: AsyncSession, user: User, person: str, limit: int = 25) -> dict[str, Any]:
+    """Tareas asignadas a una persona (por nombre o correo), dentro de las áreas del usuario."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"found": False, "message": "No tienes proyectos accesibles."}
+    who = (person or "").strip().lower()
+    target = None
+    if who:
+        target = (
+            await db.execute(
+                select(User)
+                .where(or_(func.lower(User.name).contains(who), func.lower(User.email).contains(who)))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if target is None:
+        return {"found": False, "message": f"No encontré a «{person}» entre los usuarios."}
+    rows = (
+        await db.execute(
+            select(Task, Project.name)
+            .join(Project, Project.id == Task.project_id)
+            .where(Task.project_id.in_(pids), Task.assignee_id == target.id)
+            .order_by(Task.status, Task.due_date.is_(None), Task.due_date)
+            .limit(limit)
+        )
+    ).all()
+    return {"found": True, "person": target.name, "tasks": [_task_row(t, pn) for (t, pn) in rows]}

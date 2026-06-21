@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Send } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Check, Send, Sparkles } from "lucide-react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import {
   type AgentMessage,
@@ -12,16 +12,39 @@ import {
   sendMessage,
 } from "../api/agent";
 import { useAgentStore } from "../store/agentStore";
-import { Button, Spinner } from "./ui";
+import Markdown from "./Markdown";
+import { Spinner } from "./ui";
 
 const SUGGESTIONS = [
   "¿Cómo van mis proyectos?",
+  "¿Qué tareas tengo pendientes?",
   "¿Qué tareas están vencidas?",
-  "Crea el proyecto Innovación en IT",
-  "Crea una reunión con ana@invesa.com mañana",
+  "Agenda una reunión con ana@invesa.com mañana",
 ];
 
-function MessageBubble({
+function AssistantAvatar() {
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-indigo-600 text-white shadow-sm">
+      <Sparkles className="h-4 w-4" />
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 px-4 py-3">
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MessageRow({
   message,
   onConfirm,
   onCancel,
@@ -32,32 +55,46 @@ function MessageBubble({
   onCancel: () => void;
   busy: boolean;
 }) {
-  const isUser = message.role === "user";
-  const pending = message.action?.status === "pending";
+  if (message.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm">
+          {message.content}
+        </div>
+      </div>
+    );
+  }
+
+  const status = message.action?.status;
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-          isUser ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-800"
-        }`}
-      >
-        <p className="whitespace-pre-wrap">{message.content}</p>
-        {pending && (
-          <div className="mt-3 flex gap-2">
-            <Button size="sm" onClick={onConfirm} disabled={busy}>
-              Confirmar
-            </Button>
-            <Button size="sm" variant="secondary" onClick={onCancel} disabled={busy}>
+    <div className="flex gap-2.5">
+      <AssistantAvatar />
+      <div className="max-w-[85%] space-y-2">
+        <div className="rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm">
+          <Markdown>{message.content}</Markdown>
+        </div>
+        {status === "pending" && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+            >
+              <Check className="h-3.5 w-3.5" /> Confirmar
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+            >
               Cancelar
-            </Button>
+            </button>
           </div>
         )}
-        {message.action?.status === "executed" && (
-          <p className="mt-1 text-xs text-slate-400">acción ejecutada ✓</p>
-        )}
-        {message.action?.status === "cancelled" && (
-          <p className="mt-1 text-xs text-slate-400">acción cancelada</p>
-        )}
+        {status === "executed" && <p className="px-1 text-xs text-emerald-600">✓ Acción ejecutada</p>}
+        {status === "cancelled" && <p className="px-1 text-xs text-slate-400">Acción cancelada</p>}
       </div>
     </div>
   );
@@ -69,6 +106,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const setConversationId = useAgentStore((s) => s.setActiveConversationId);
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const conversationsQuery = useQuery({ queryKey: ["agent-convs"], queryFn: listConversations });
 
@@ -104,61 +142,109 @@ export default function AgentChat({ className = "" }: { className?: string }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messagesQuery.data]);
+  }, [messagesQuery.data, send.isPending]);
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+  }, [input]);
+
+  const doSend = () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || send.isPending) return;
     setInput("");
     send.mutate(text);
   };
 
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      doSend();
+    }
+  };
+
   const messages = messagesQuery.data ?? [];
+  const loadingHistory = conversationId !== null && messagesQuery.isLoading;
+  const showEmpty = !loadingHistory && messages.length === 0 && !send.isPending;
 
   return (
-    <div className={`flex flex-col ${className}`}>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {conversationId !== null && messagesQuery.isLoading && <Spinner label="Cargando…" />}
-        {messages.length === 0 && (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-500">Pregúntame o pídeme una acción:</p>
-            <div className="flex flex-wrap gap-2">
+    <div className={`flex min-h-0 flex-col ${className}`}>
+      <div className="flex-1 overflow-y-auto p-4">
+        {loadingHistory ? (
+          <Spinner label="Cargando…" />
+        ) : showEmpty ? (
+          <div className="flex h-full flex-col items-center justify-center px-2 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 text-white shadow-md">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <h3 className="text-base font-semibold text-slate-800">¿En qué te ayudo hoy?</h3>
+            <p className="mt-1 max-w-xs text-sm text-slate-500">
+              Pregúntame por tus proyectos y tareas, o pídeme una acción.
+            </p>
+            <div className="mt-5 grid w-full max-w-sm gap-2">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => send.mutate(s)}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-brand-300 hover:bg-brand-50"
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-left text-sm text-slate-600 transition hover:border-brand-300 hover:bg-brand-50"
                 >
                   {s}
                 </button>
               ))}
             </div>
           </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((m) => (
+              <MessageRow
+                key={m.id}
+                message={m}
+                onConfirm={() => m.action && confirm.mutate(m.action.id)}
+                onCancel={() => m.action && cancel.mutate(m.action.id)}
+                busy={confirm.isPending || cancel.isPending}
+              />
+            ))}
+            {send.isPending && (
+              <div className="flex gap-2.5">
+                <AssistantAvatar />
+                <div className="rounded-2xl rounded-tl-sm border border-slate-200 bg-white shadow-sm">
+                  <TypingDots />
+                </div>
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
         )}
-        {messages.map((m) => (
-          <MessageBubble
-            key={m.id}
-            message={m}
-            onConfirm={() => m.action && confirm.mutate(m.action.id)}
-            onCancel={() => m.action && cancel.mutate(m.action.id)}
-            busy={confirm.isPending || cancel.isPending}
-          />
-        ))}
-        <div ref={endRef} />
       </div>
-      <form onSubmit={submit} className="flex items-center gap-2 border-t border-slate-200 p-3">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Escribe tu mensaje…"
-          className="h-10 flex-1 rounded-lg border border-slate-300 px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
-        />
-        <Button type="submit" disabled={!input.trim() || send.isPending}>
-          <Send className="h-4 w-4" />
-        </Button>
-      </form>
+
+      <div className="border-t border-slate-200 p-3">
+        <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white px-3 py-2 transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Escribe tu mensaje…"
+            className="max-h-[120px] flex-1 resize-none bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={doSend}
+            disabled={!input.trim() || send.isPending}
+            title="Enviar"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-1.5 px-1 text-[11px] text-slate-400">
+          Enter para enviar · Shift+Enter para salto de línea
+        </p>
+      </div>
     </div>
   );
 }
