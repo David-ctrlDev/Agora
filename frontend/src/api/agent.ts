@@ -25,6 +25,8 @@ export interface AgentMessage {
 
 export const listConversations = () => api.get<Conversation[]>("/api/agent/conversations");
 export const createConversation = () => api.post<Conversation>("/api/agent/conversations", {});
+export const deleteConversation = (id: number) =>
+  api.del<void>(`/api/agent/conversations/${id}`);
 export const listMessages = (conversationId: number) =>
   api.get<AgentMessage[]>(`/api/agent/conversations/${conversationId}/messages`);
 export const sendMessage = (conversationId: number, content: string) =>

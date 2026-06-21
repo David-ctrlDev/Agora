@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 interface AgentStore {
   activeConversationId: number | null;
-  setActiveConversationId: (id: number) => void;
+  setActiveConversationId: (id: number | null) => void;
   isOpen: boolean;
   open: () => void;
   close: () => void;

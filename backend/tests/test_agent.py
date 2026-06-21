@@ -100,3 +100,18 @@ async def test_agent_advances_task(client, session):
     tasks = (await client.get(f"/api/projects/{pid}/tasks")).json()
     assert next(t for t in tasks if t["id"] == tid)["status"] == "done"
 
+
+async def test_conversation_autotitle_and_delete(client, session):
+    admin = await create_user(session, "admin@invesa.com", "Admin", role="admin")
+    await login(client, admin.id)
+    cid = (await client.post("/api/agent/conversations", json={})).json()["id"]
+
+    await client.post(
+        f"/api/agent/conversations/{cid}/messages", json={"content": "como van mis proyectos"}
+    )
+    conv = next(c for c in (await client.get("/api/agent/conversations")).json() if c["id"] == cid)
+    assert conv["title"].lower().startswith("como van")
+
+    assert (await client.delete(f"/api/agent/conversations/{cid}")).status_code == 204
+    assert all(c["id"] != cid for c in (await client.get("/api/agent/conversations")).json())
+

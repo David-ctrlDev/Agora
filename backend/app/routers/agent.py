@@ -44,6 +44,16 @@ async def create_conversation(
     return await svc.create_conversation(db, user, payload.title)
 
 
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    conversation = await _conversation(conversation_id, user, db)
+    await svc.delete_conversation(db, conversation)
+
+
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageRead])
 async def list_messages(
     conversation_id: int,

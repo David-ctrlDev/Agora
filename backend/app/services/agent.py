@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import actions, gemini_runner, tools
@@ -32,6 +32,12 @@ _PROPOSAL_COMPOSERS = {
 }
 
 
+def _apply_autotitle(conversation: AgentConversation, content: str) -> None:
+    """Nombra la conversación con el primer mensaje del usuario."""
+    if conversation.title in (None, "Conversación") and content.strip():
+        conversation.title = content.strip()[:60]
+
+
 class ActionNotPending(Exception):
     """La acción ya fue ejecutada o cancelada."""
 
@@ -55,6 +61,13 @@ async def list_conversations(db: AsyncSession, user: User) -> list[AgentConversa
 
 async def get_conversation(db: AsyncSession, conversation_id: int) -> AgentConversation | None:
     return await db.get(AgentConversation, conversation_id)
+
+
+async def delete_conversation(db: AsyncSession, conversation: AgentConversation) -> None:
+    await db.execute(delete(AgentAction).where(AgentAction.conversation_id == conversation.id))
+    await db.execute(delete(AgentMessage).where(AgentMessage.conversation_id == conversation.id))
+    await db.delete(conversation)
+    await db.commit()
 
 
 async def get_action(db: AsyncSession, action_id: int) -> AgentAction | None:
@@ -112,6 +125,7 @@ async def _run_gemini(
     db: AsyncSession, user: User, conversation: AgentConversation, content: str
 ) -> MessageRead:
     history = await list_messages(db, conversation.id)
+    _apply_autotitle(conversation, content)
     db.add(AgentMessage(conversation_id=conversation.id, role="user", content=content))
     await db.flush()
 
@@ -146,6 +160,7 @@ async def run_message(
     if settings.gemini_provider == "real":
         return await _run_gemini(db, user, conversation, content)
 
+    _apply_autotitle(conversation, content)
     db.add(AgentMessage(conversation_id=conversation.id, role="user", content=content))
     await db.flush()
 
