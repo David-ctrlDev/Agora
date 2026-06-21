@@ -61,3 +61,16 @@ export const updateTask = (taskId: number, payload: TaskUpdate) =>
   api.patch<Task>(`/api/tasks/${taskId}`, payload);
 export const deleteTask = (taskId: number) => api.del<void>(`/api/tasks/${taskId}`);
 export const listMyTasks = () => api.get<Task[]>("/api/tasks/mine");
+
+export interface Comment {
+  id: number;
+  body: string;
+  author_id: number | null;
+  author_name: string | null;
+  created_at: string;
+}
+
+export const listComments = (taskId: number) =>
+  api.get<Comment[]>(`/api/tasks/${taskId}/comments`);
+export const addComment = (taskId: number, body: string) =>
+  api.post<Comment>(`/api/tasks/${taskId}/comments`, { body });

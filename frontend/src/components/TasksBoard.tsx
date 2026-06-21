@@ -15,6 +15,7 @@ import {
   updateTask,
 } from "../api/tasks";
 import { type AppUser } from "../api/users";
+import TaskDetailModal from "./TaskDetailModal";
 import { Badge, Button, Card, Input, Select, Spinner } from "./ui";
 
 interface Props {
@@ -33,6 +34,7 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [assigneeId, setAssigneeId] = useState<number | "">("");
   const [dueDate, setDueDate] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
   const create = useMutation({
@@ -47,8 +49,7 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
     },
   });
   const update = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: TaskStatus }) =>
-      updateTask(id, { status }),
+    mutationFn: ({ id, status }: { id: number; status: TaskStatus }) => updateTask(id, { status }),
     onSuccess: invalidate,
   });
   const remove = useMutation({ mutationFn: (id: number) => deleteTask(id), onSuccess: invalidate });
@@ -65,6 +66,7 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
   };
 
   const tasks = tasksQuery.data ?? [];
+  const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
 
   return (
     <div className="space-y-4">
@@ -148,7 +150,13 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
                   {column.map((t) => (
                     <Card key={t.id} className="p-3">
                       <div className="mb-2 flex items-start justify-between gap-2">
-                        <span className="text-sm font-medium text-slate-900">{t.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(t.id)}
+                          className="text-left text-sm font-medium text-slate-900 hover:text-brand-600"
+                        >
+                          {t.title}
+                        </button>
                         <Badge tone={TASK_PRIORITY[t.priority]?.tone ?? "neutral"}>
                           {TASK_PRIORITY[t.priority]?.label ?? t.priority}
                         </Badge>
@@ -194,6 +202,16 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
             );
           })}
         </div>
+      )}
+
+      {selectedTask && (
+        <TaskDetailModal
+          key={selectedTask.id}
+          task={selectedTask}
+          canEdit={canEdit}
+          users={users}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </div>
   );
