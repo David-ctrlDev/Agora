@@ -5,6 +5,7 @@ import RequireAuth from "./components/RequireAuth";
 import AgentPage from "./pages/AgentPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import AreasPage from "./pages/AreasPage";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
@@ -17,7 +18,8 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
-          <Route index element={<Navigate to="/areas" replace />} />
+          <Route index element={<Navigate to="/inicio" replace />} />
+          <Route path="/inicio" element={<HomePage />} />
           <Route path="/areas" element={<AreasPage />} />
           <Route path="/proyectos" element={<ProjectsPage />} />
           <Route path="/proyectos/:id" element={<ProjectDetailPage />} />
@@ -25,7 +27,7 @@ export default function App() {
           <Route path="/analitica" element={<AnalyticsPage />} />
           <Route path="/agente" element={<AgentPage />} />
           <Route path="/notificaciones" element={<NotificationsPage />} />
-          <Route path="*" element={<Navigate to="/areas" replace />} />
+          <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Route>
       </Route>
     </Routes>

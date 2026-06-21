@@ -1,5 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Bell, Building2, FolderKanban, ListChecks, LogOut, Sparkles } from "lucide-react";
+import {
+  BarChart3,
+  Bell,
+  Building2,
+  FolderKanban,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  Sparkles,
+} from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { unreadCount } from "../api/notifications";
@@ -8,6 +17,7 @@ import FloatingAgent from "./FloatingAgent";
 import GoogleConnect from "./GoogleConnect";
 
 const navItems = [
+  { to: "/inicio", label: "Inicio", icon: LayoutDashboard },
   { to: "/areas", label: "Áreas", icon: Building2 },
   { to: "/proyectos", label: "Proyectos", icon: FolderKanban },
   { to: "/tareas", label: "Tareas", icon: ListChecks },
