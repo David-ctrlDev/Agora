@@ -1,6 +1,7 @@
 """Modelos SQLAlchemy."""
 
 from app.models.agent_action import AgentAction
+from app.models.agent_attachment import AgentAttachment
 from app.models.agent_conversation import AgentConversation
 from app.models.agent_message import AgentMessage
 from app.models.area import Area
@@ -23,6 +24,7 @@ from app.models.user_area import UserArea
 
 __all__ = [
     "AgentAction",
+    "AgentAttachment",
     "AgentConversation",
     "AgentMessage",
     "Area",

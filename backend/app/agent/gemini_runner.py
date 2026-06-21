@@ -25,7 +25,9 @@ def _system(user: User) -> str:
         f"El usuario actual es {user.name} ({user.email}), con rol {user.role}. "
         "Responde en español, claro y conciso, usando Markdown cuando ayude (listas, negritas). "
         "Usa las herramientas para consultar datos reales; están acotadas a las áreas del usuario, "
-        "así que nunca inventes proyectos, tareas ni cifras. Si preguntan por «mis tareas» o «qué "
+        "así que nunca inventes proyectos, tareas ni cifras. Para «qué proyectos lidera X», el "
+        "avance/porcentaje de proyectos o una visión general, usa projects_overview (incluye "
+        "responsable, estado, avance % y fecha de entrega). Si preguntan por «mis tareas» o «qué "
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
         "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
         "tarea, crear reunión, enviar correo, cambiar o asignar tareas) llama a la herramienta "
@@ -44,6 +46,7 @@ _ACTION_TOOLS = {
 
 _FUNCTION_DECLARATIONS = [
     {"name": "projects_status", "description": "Estado de los proyectos del usuario: tareas abiertas y vencidas.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "projects_overview", "description": "Panorama de proyectos accesibles con su responsable/líder, estado, avance en porcentaje (%) y fecha de entrega. Úsala para «qué proyectos lidera X», el avance/porcentaje de uno o varios proyectos, o una visión general.", "parameters": {"type": "object", "properties": {}}},
     {"name": "overdue_tasks", "description": "Lista las tareas vencidas en los proyectos del usuario.", "parameters": {"type": "object", "properties": {}}},
     {"name": "my_tasks", "description": "Tareas abiertas asignadas al usuario actual.", "parameters": {"type": "object", "properties": {}}},
     {"name": "tasks_by_assignee", "description": "Tareas asignadas a una persona (por nombre o correo).", "parameters": {"type": "object", "properties": {"person": {"type": "string"}}, "required": ["person"]}},
@@ -103,6 +106,8 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
 
 
 async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any]) -> Any:
+    if name == "projects_overview":
+        return await tools.projects_overview(db, user)
     if name == "overdue_tasks":
         return await tools.overdue_tasks(db, user)
     if name == "my_tasks":

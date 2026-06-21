@@ -32,6 +32,27 @@ export interface DirectoryPerson {
 
 export const getDirectory = () => api.get<DirectoryPerson[]>("/api/google/directory");
 
+export interface DriveEntry {
+  external_id: string;
+  title: string;
+  mime_type: string | null;
+  web_url: string | null;
+  modified_at: string | null;
+  is_folder: boolean;
+}
+
+export const browseDrive = (folderId?: string | null, q?: string, shared?: boolean) => {
+  const params = new URLSearchParams();
+  if (folderId) params.set("folder_id", folderId);
+  if (q && q.trim()) params.set("q", q.trim());
+  if (shared) params.set("shared", "true");
+  const qs = params.toString();
+  return api.get<DriveEntry[]>(`/api/google/drive${qs ? `?${qs}` : ""}`);
+};
+
+export const importDriveFiles = (projectId: number, files: DriveEntry[]) =>
+  api.post<{ new_documents: number }>(`/api/projects/${projectId}/google/import`, { files });
+
 export interface MeetingResult {
   title: string;
   meet_url: string | null;

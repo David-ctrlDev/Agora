@@ -11,6 +11,7 @@ from app.integrations.google.factory import get_google_provider
 from app.models.google_document import GoogleDocument
 from app.models.oauth_token import OAuthToken
 from app.models.user import User
+from app.rag.extract import UnsupportedFile, extract_text
 
 DEV_SCOPES = "drive.readonly calendar.events"
 
@@ -263,6 +264,61 @@ async def list_directory(db: AsyncSession, user: User) -> list[dict]:
                 pass
     rows = (await db.execute(select(User).where(User.is_active.is_(True)).order_by(User.name))).scalars().all()
     return [{"name": u.name, "email": u.email} for u in rows]
+
+
+async def browse_drive(
+    db: AsyncSession, user: User, folder_id: str | None, query: str | None, shared: bool = False
+) -> list[dict]:
+    """Carpetas y archivos de Drive para navegar/buscar (no persiste nada)."""
+    if settings.google_provider == "real":
+        access = await get_access_token(db, user)
+        if not access:
+            raise GoogleNotConnected()
+        return await real_api.browse_drive(access, folder_id, query, shared)
+    provider = get_google_provider()
+    return [
+        {
+            "external_id": f.external_id,
+            "title": f.title,
+            "mime_type": f.mime_type,
+            "web_url": f.web_url,
+            "modified_at": f.modified_at.isoformat() if f.modified_at else None,
+            "is_folder": False,
+        }
+        for f in provider.list_drive_files(query or "")
+    ]
+
+
+async def import_drive_documents(db: AsyncSession, project_id: int, items: list[dict]) -> int:
+    """Vincula al proyecto los archivos de Drive que el usuario eligió en el explorador."""
+    new = 0
+    for it in items:
+        if await _upsert_doc(
+            db,
+            project_id,
+            "drive",
+            it["external_id"],
+            it.get("title") or "(sin nombre)",
+            it.get("mime_type"),
+            it.get("web_url"),
+            _parse_dt(it.get("modified_at")),
+        ):
+            new += 1
+    await db.commit()
+    return new
+
+
+async def read_drive_file(db: AsyncSession, user: User, file_id: str) -> tuple[str, str]:
+    """Devuelve (nombre, texto) del contenido de un archivo de Drive."""
+    if settings.google_provider == "real":
+        access = await get_access_token(db, user)
+        if not access:
+            raise GoogleNotConnected()
+        name, mime, data = await real_api.fetch_drive_file_content(access, file_id)
+        return name, extract_text(name, mime, data)
+    return f"Documento de Drive {file_id}", (
+        f"(Contenido simulado del archivo {file_id} de Drive para pruebas locales.)"
+    )
 
 
 async def list_documents(db: AsyncSession, project_id: int) -> list[GoogleDocument]:

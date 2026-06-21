@@ -6,7 +6,13 @@ from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.project import Project
 from app.models.user import User
-from app.schemas.google import GoogleDocumentRead, GoogleStatus, MeetingCreate, MeetingResult
+from app.schemas.google import (
+    DriveImport,
+    GoogleDocumentRead,
+    GoogleStatus,
+    MeetingCreate,
+    MeetingResult,
+)
 from app.services import audit
 from app.services import google as svc
 from app.services import projects as projects_svc
@@ -88,6 +94,20 @@ async def create_meeting(
     return MeetingResult(**result)
 
 
+@router.post("/projects/{project_id}/google/import")
+async def import_drive(
+    project_id: int,
+    payload: DriveImport,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, int]:
+    project = await _project(project_id, user, db, edit=True)
+    count = await svc.import_drive_documents(
+        db, project.id, [f.model_dump() for f in payload.files]
+    )
+    return {"new_documents": count}
+
+
 @router.get("/projects/{project_id}/google/documents", response_model=list[GoogleDocumentRead])
 async def list_documents(
     project_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
@@ -101,3 +121,19 @@ async def google_directory(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[dict]:
     return await svc.list_directory(db, user)
+
+
+@router.get("/google/drive")
+async def browse_drive(
+    folder_id: str | None = None,
+    q: str | None = None,
+    shared: bool = False,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    try:
+        return await svc.browse_drive(db, user, folder_id, q, shared)
+    except svc.GoogleNotConnected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Conecta tu cuenta de Google primero"
+        ) from None

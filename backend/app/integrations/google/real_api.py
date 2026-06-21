@@ -6,6 +6,13 @@ from email.message import EmailMessage
 import httpx
 
 _TIMEOUT = 25
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+# Cómo exportar a texto cada tipo de documento nativo de Google.
+_GOOGLE_EXPORT = {
+    "application/vnd.google-apps.document": "text/plain",
+    "application/vnd.google-apps.spreadsheet": "text/csv",
+    "application/vnd.google-apps.presentation": "text/plain",
+}
 
 
 def _headers(access_token: str) -> dict[str, str]:
@@ -77,6 +84,88 @@ async def list_drive_files(access_token: str, limit: int = 25) -> list[dict]:
         }
         for f in data.get("files", [])
     ]
+
+
+def _drive_entry(f: dict) -> dict:
+    mime = f.get("mimeType")
+    return {
+        "external_id": f["id"],
+        "title": f.get("name", "(sin nombre)"),
+        "mime_type": mime,
+        "web_url": f.get("webViewLink"),
+        "modified_at": f.get("modifiedTime"),
+        "is_folder": mime == _FOLDER_MIME,
+    }
+
+
+async def browse_drive(
+    access_token: str,
+    folder_id: str | None = None,
+    query: str | None = None,
+    shared: bool = False,
+    limit: int = 100,
+) -> list[dict]:
+    """Lista carpetas y archivos: por carpeta, por búsqueda, o lo compartido conmigo."""
+    query = (query or "").strip()
+    if query:
+        safe = query.replace("\\", "\\\\").replace("'", "\\'")
+        q = f"name contains '{safe}' and trashed = false"
+    elif shared and not folder_id:
+        # Raíz de "Compartido conmigo": archivos/carpetas que otros compartieron.
+        q = "sharedWithMe = true and trashed = false"
+    else:
+        parent = folder_id or "root"
+        q = f"'{parent}' in parents and trashed = false"
+    params = {
+        "pageSize": limit,
+        "fields": "files(id,name,mimeType,webViewLink,modifiedTime)",
+        "orderBy": "folder,name",
+        "q": q,
+        # Incluir elementos de unidades compartidas además de Mi unidad.
+        "includeItemsFromAllDrives": "true",
+        "supportsAllDrives": "true",
+    }
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.get(
+            "https://www.googleapis.com/drive/v3/files", params=params, headers=_headers(access_token)
+        )
+        r.raise_for_status()
+        data = r.json()
+    return [_drive_entry(f) for f in data.get("files", [])]
+
+
+async def fetch_drive_file_content(access_token: str, file_id: str) -> tuple[str, str, bytes]:
+    """Devuelve (nombre, mime_type, bytes) de un archivo de Drive.
+
+    Los documentos nativos de Google (Docs/Sheets/Slides) se exportan a texto;
+    los binarios (PDF, Word, etc.) se descargan tal cual para extraer su texto luego.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        meta = await client.get(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}",
+            params={"fields": "id,name,mimeType"},
+            headers=_headers(access_token),
+        )
+        meta.raise_for_status()
+        info = meta.json()
+        name = info.get("name", "documento")
+        mime = info.get("mimeType", "")
+        if mime in _GOOGLE_EXPORT:
+            export_mime = _GOOGLE_EXPORT[mime]
+            resp = await client.get(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}/export",
+                params={"mimeType": export_mime},
+                headers=_headers(access_token),
+            )
+            resp.raise_for_status()
+            return name, export_mime, resp.content
+        resp = await client.get(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}",
+            params={"alt": "media"},
+            headers=_headers(access_token),
+        )
+        resp.raise_for_status()
+        return name, mime, resp.content
 
 
 async def list_calendar_events(access_token: str, limit: int = 15) -> list[dict]:

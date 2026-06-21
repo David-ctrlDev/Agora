@@ -1,15 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Check, Cloud, FileText, RefreshCw, Search, Video, X } from "lucide-react";
+import { Calendar, Check, Cloud, FileText, FolderOpen, Search, Video, X } from "lucide-react";
 import { useState } from "react";
 
 import {
+  type DriveEntry,
   type GoogleDocument,
   createMeeting,
   getDirectory,
   googleStatus,
+  importDriveFiles,
   listGoogleDocuments,
-  syncGoogle,
 } from "../api/google";
+import DriveBrowser from "./DriveBrowser";
 import { Badge, Button, Card, Input, Spinner } from "./ui";
 
 interface Props {
@@ -53,6 +55,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
   const connected = statusQuery.data?.connected ?? false;
 
   const [showMeeting, setShowMeeting] = useState(false);
+  const [showDrive, setShowDrive] = useState(false);
   const [title, setTitle] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
   const [peopleSearch, setPeopleSearch] = useState("");
@@ -61,7 +64,13 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
   const invalidateDocs = () =>
     queryClient.invalidateQueries({ queryKey: ["project", projectId, "google-docs"] });
 
-  const sync = useMutation({ mutationFn: () => syncGoogle(projectId), onSuccess: invalidateDocs });
+  const importMut = useMutation({
+    mutationFn: (files: DriveEntry[]) => importDriveFiles(projectId, files),
+    onSuccess: () => {
+      invalidateDocs();
+      setShowDrive(false);
+    },
+  });
   const meeting = useMutation({
     mutationFn: () => createMeeting(projectId, { title: title.trim(), attendees, when: when || null }),
     onSuccess: () => {
@@ -111,15 +120,26 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
               <Button size="sm" onClick={() => setShowMeeting((s) => !s)}>
                 <Video className="h-4 w-4" /> Crear reunión
               </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => sync.mutate()}
-                disabled={sync.isPending}
-              >
-                <RefreshCw className="h-4 w-4" />
-                {sync.isPending ? "Trayendo…" : "Traer datos de Drive"}
+              <Button size="sm" variant="secondary" onClick={() => setShowDrive(true)}>
+                <FolderOpen className="h-4 w-4" /> Explorar Drive
               </Button>
+            </div>
+          )}
+
+          {showDrive && (
+            <DriveBrowser
+              title="Importar archivos de Drive"
+              actionLabel="Importar"
+              multiSelect
+              busy={importMut.isPending}
+              onClose={() => setShowDrive(false)}
+              onConfirm={(files) => importMut.mutate(files)}
+            />
+          )}
+
+          {importMut.isSuccess && importMut.data && (
+            <div className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              ✅ {importMut.data.new_documents} archivo(s) vinculados al proyecto.
             </div>
           )}
 
@@ -230,7 +250,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
             <Spinner label="Cargando…" />
           ) : docs.length === 0 ? (
             <p className="text-sm text-slate-400">
-              Sin documentos. Usa «Traer datos de Drive» para sincronizar archivos y eventos.
+              Sin documentos. Usa «Explorar Drive» para navegar tus carpetas e importar archivos.
             </p>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2">

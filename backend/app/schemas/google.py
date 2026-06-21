@@ -22,6 +22,18 @@ class MeetingResult(BaseModel):
     starts_at: datetime
 
 
+class DriveImportItem(BaseModel):
+    external_id: str
+    title: str = "(sin nombre)"
+    mime_type: str | None = None
+    web_url: str | None = None
+    modified_at: str | None = None
+
+
+class DriveImport(BaseModel):
+    files: list[DriveImportItem] = []
+
+
 class GoogleDocumentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -8,10 +8,14 @@ from app.agent import actions, gemini_runner, tools
 from app.agent.llm import Decision, DevAgentLLM
 from app.core.config import settings
 from app.models.agent_action import AgentAction
+from app.models.agent_attachment import AgentAttachment
 from app.models.agent_conversation import AgentConversation
 from app.models.agent_message import AgentMessage
 from app.models.user import User
 from app.schemas.agent import ActionRead, MessageRead
+
+# Límite de texto de adjuntos inyectado al LLM (~6k tokens), para no desbordar el contexto.
+_MAX_ATTACH_CHARS = 24000
 
 _llm = DevAgentLLM()
 _ACTION_INTENTS = {
@@ -65,9 +69,91 @@ async def get_conversation(db: AsyncSession, conversation_id: int) -> AgentConve
 
 async def delete_conversation(db: AsyncSession, conversation: AgentConversation) -> None:
     await db.execute(delete(AgentAction).where(AgentAction.conversation_id == conversation.id))
+    await db.execute(delete(AgentAttachment).where(AgentAttachment.conversation_id == conversation.id))
     await db.execute(delete(AgentMessage).where(AgentMessage.conversation_id == conversation.id))
     await db.delete(conversation)
     await db.commit()
+
+
+async def add_attachment(
+    db: AsyncSession,
+    conversation: AgentConversation,
+    user: User,
+    name: str,
+    mime_type: str | None,
+    text: str,
+    source: str,
+) -> AgentAttachment:
+    attachment = AgentAttachment(
+        conversation_id=conversation.id,
+        user_id=user.id,
+        name=name[:300],
+        mime_type=(mime_type or None),
+        source=source,
+        char_count=len(text),
+        content_text=text,
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+async def list_attachments(db: AsyncSession, conversation_id: int) -> list[AgentAttachment]:
+    result = await db.execute(
+        select(AgentAttachment)
+        .where(AgentAttachment.conversation_id == conversation_id)
+        .order_by(AgentAttachment.id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_attachment(db: AsyncSession, attachment_id: int) -> AgentAttachment | None:
+    return await db.get(AgentAttachment, attachment_id)
+
+
+async def delete_attachment(db: AsyncSession, attachment: AgentAttachment) -> None:
+    await db.delete(attachment)
+    await db.commit()
+
+
+async def _load_attachments(
+    db: AsyncSession, conversation_id: int, ids: list[int]
+) -> list[AgentAttachment]:
+    if not ids:
+        return []
+    result = await db.execute(
+        select(AgentAttachment)
+        .where(
+            AgentAttachment.conversation_id == conversation_id,
+            AgentAttachment.id.in_(ids),
+        )
+        .order_by(AgentAttachment.id)
+    )
+    return list(result.scalars().all())
+
+
+def _attachments_note(attachments: list[AgentAttachment]) -> str:
+    if not attachments:
+        return ""
+    names = ", ".join(a.name for a in attachments)
+    return f"\n\n📎 *Adjuntos:* {names}"
+
+
+def _attachments_context(attachments: list[AgentAttachment]) -> str:
+    if not attachments:
+        return ""
+    parts: list[str] = []
+    budget = _MAX_ATTACH_CHARS
+    for a in attachments:
+        text = a.content_text or ""
+        if len(text) > budget:
+            text = text[:budget].rstrip() + "\n…[contenido truncado]"
+        budget -= len(text)
+        parts.append(f"--- Documento adjunto: «{a.name}» ---\n{text}")
+        if budget <= 0:
+            break
+    return "\n\n".join(parts)
 
 
 async def get_action(db: AsyncSession, action_id: int) -> AgentAction | None:
@@ -122,14 +208,26 @@ async def _run_read(db: AsyncSession, user: User, decision: Decision) -> tuple[s
 
 
 async def _run_gemini(
-    db: AsyncSession, user: User, conversation: AgentConversation, content: str
+    db: AsyncSession,
+    user: User,
+    conversation: AgentConversation,
+    content: str,
+    attachments: list[AgentAttachment],
 ) -> MessageRead:
     history = await list_messages(db, conversation.id)
     _apply_autotitle(conversation, content)
-    db.add(AgentMessage(conversation_id=conversation.id, role="user", content=content))
+    db.add(
+        AgentMessage(
+            conversation_id=conversation.id,
+            role="user",
+            content=content + _attachments_note(attachments),
+        )
+    )
     await db.flush()
 
-    text, action = await gemini_runner.run_turn(db, user, content, history)
+    block = _attachments_context(attachments)
+    model_input = f"{block}\n\n---\n\n{content}" if block else content
+    text, action = await gemini_runner.run_turn(db, user, model_input, history)
     assistant = AgentMessage(conversation_id=conversation.id, role="assistant", content=text)
     db.add(assistant)
     await db.flush()
@@ -155,13 +253,24 @@ async def _run_gemini(
 
 
 async def run_message(
-    db: AsyncSession, user: User, conversation: AgentConversation, content: str
+    db: AsyncSession,
+    user: User,
+    conversation: AgentConversation,
+    content: str,
+    attachment_ids: list[int] | None = None,
 ) -> MessageRead:
+    attachments = await _load_attachments(db, conversation.id, attachment_ids or [])
     if settings.gemini_provider == "real":
-        return await _run_gemini(db, user, conversation, content)
+        return await _run_gemini(db, user, conversation, content, attachments)
 
     _apply_autotitle(conversation, content)
-    db.add(AgentMessage(conversation_id=conversation.id, role="user", content=content))
+    db.add(
+        AgentMessage(
+            conversation_id=conversation.id,
+            role="user",
+            content=content + _attachments_note(attachments),
+        )
+    )
     await db.flush()
 
     decision = _llm.route(content)

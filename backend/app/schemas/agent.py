@@ -27,8 +27,24 @@ class ActionRead(BaseModel):
     created_at: datetime
 
 
+class AttachmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    mime_type: str | None = None
+    source: str
+    char_count: int
+    created_at: datetime
+
+
+class DriveAttachCreate(BaseModel):
+    file_id: str = Field(min_length=1)
+
+
 class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+    attachment_ids: list[int] = Field(default_factory=list)
 
 
 class MessageRead(BaseModel):

@@ -1,8 +1,13 @@
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  // En multipart (FormData) dejamos que el navegador fije el Content-Type con su boundary.
+  const isForm = options?.body instanceof FormData;
   const res = await fetch(path, {
     credentials: "include",
     ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+    headers: {
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
+      ...(options?.headers ?? {}),
+    },
   });
 
   if (!res.ok) {
@@ -29,4 +34,5 @@ export const api = {
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  upload: <T>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
 };

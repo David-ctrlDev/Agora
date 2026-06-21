@@ -62,6 +62,34 @@ async def projects_status(db: AsyncSession, user: User) -> list[dict[str, Any]]:
     return result
 
 
+async def projects_overview(db: AsyncSession, user: User, limit: int = 250) -> list[dict[str, Any]]:
+    """Panorama de proyectos accesibles: responsable/líder, estado, avance (%) y entrega."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return []
+    rows = (
+        await db.execute(
+            select(Project, Area.name, User.name)
+            .join(Area, Area.id == Project.area_id)
+            .join(User, User.id == Project.owner_id, isouter=True)
+            .where(Project.id.in_(pids))
+            .order_by(Project.name)
+            .limit(limit)
+        )
+    ).all()
+    return [
+        {
+            "name": project.name,
+            "area": area_name,
+            "lead": owner_name,
+            "status": project.status,
+            "progress": project.progress,
+            "due_date": project.due_date.isoformat() if project.due_date else None,
+        }
+        for (project, area_name, owner_name) in rows
+    ]
+
+
 async def overdue_tasks(db: AsyncSession, user: User) -> list[dict[str, Any]]:
     pids = await _accessible_project_ids(db, user)
     if not pids:
