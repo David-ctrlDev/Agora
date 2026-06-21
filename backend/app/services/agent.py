@@ -13,7 +13,13 @@ from app.models.user import User
 from app.schemas.agent import ActionRead, MessageRead
 
 _llm = DevAgentLLM()
-_ACTION_INTENTS = {"create_meeting", "send_email"}
+_ACTION_INTENTS = {"create_meeting", "send_email", "create_project", "create_task"}
+_PROPOSAL_COMPOSERS = {
+    "create_meeting": _llm.compose_meeting_proposal,
+    "send_email": _llm.compose_email_proposal,
+    "create_project": _llm.compose_project_proposal,
+    "create_task": _llm.compose_task_proposal,
+}
 
 
 class ActionNotPending(Exception):
@@ -101,11 +107,7 @@ async def run_message(
     decision = _llm.route(content)
 
     if decision.intent in _ACTION_INTENTS:
-        proposal = (
-            _llm.compose_meeting_proposal(decision.args)
-            if decision.intent == "create_meeting"
-            else _llm.compose_email_proposal(decision.args)
-        )
+        proposal = _PROPOSAL_COMPOSERS[decision.intent](decision.args)
         assistant = AgentMessage(conversation_id=conversation.id, role="assistant", content=proposal)
         db.add(assistant)
         await db.flush()
@@ -138,9 +140,20 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
     if action.action_type == "create_meeting":
         result = actions.execute_create_meeting(action.params)
         text = _llm.compose_meeting_result(result)
-    else:
+    elif action.action_type == "send_email":
         result = actions.execute_send_email(action.params)
         text = _llm.compose_email_result(result)
+    elif action.action_type == "create_project":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_project(db, user, action.params)
+        text = _llm.compose_project_result(result)
+    elif action.action_type == "create_task":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_task(db, user, action.params)
+        text = _llm.compose_task_result(result)
+    else:
+        result = {"ok": False}
+        text = "Acción no soportada."
     action.status = "executed"
     action.result = result
     action.executed_at = datetime.now(timezone.utc)

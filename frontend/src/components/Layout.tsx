@@ -4,6 +4,8 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { unreadCount } from "../api/notifications";
 import { useLogout, useMe } from "../auth/useAuth";
+import FloatingAgent from "./FloatingAgent";
+import GoogleConnect from "./GoogleConnect";
 
 const navItems = [
   { to: "/areas", label: "Áreas", icon: Building2 },
@@ -113,6 +115,9 @@ export default function Layout() {
               </button>
             </div>
           )}
+          <div className="px-1">
+            <GoogleConnect />
+          </div>
           <div className="px-2 pt-2">
             <ApiStatus />
           </div>
@@ -124,6 +129,8 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      <FloatingAgent />
     </div>
   );
 }

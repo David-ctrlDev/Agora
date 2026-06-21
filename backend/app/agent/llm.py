@@ -10,6 +10,8 @@ from typing import Any
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
+_CREATE_VERBS = ["crea", "crear", "añade", "anade", "agrega", "registra", "agenda", "programa", "organiza"]
+
 
 @dataclass
 class Decision:
@@ -20,9 +22,13 @@ class Decision:
 class DevAgentLLM:
     def route(self, message: str) -> Decision:
         m = message.lower()
-        wants_meeting = any(k in m for k in ["reunión", "reunion", "meeting", "meet"])
-        wants_create = any(k in m for k in ["crea", "cre", "agenda", "agénda", "program", "organiza"])
-        if wants_meeting and wants_create:
+        wants_create = any(k in m for k in _CREATE_VERBS)
+
+        if wants_create and "tarea" in m:
+            return Decision("create_task", self._task_args(message))
+        if wants_create and "proyecto" in m:
+            return Decision("create_project", self._project_args(message))
+        if wants_create and any(k in m for k in ["reunión", "reunion", "meeting", "meet"]):
             return Decision("create_meeting", self._meeting_args(message))
         if any(k in m for k in ["correo", "email", "mail", "notifica", "envía", "envia"]):
             return Decision("send_email", self._email_args(message))
@@ -64,12 +70,8 @@ class DevAgentLLM:
         return [p.strip() for p in parts if p.strip()]
 
     def _when(self, message: str) -> datetime:
-        m = message.lower()
         now = datetime.now(timezone.utc)
-        base = now + timedelta(days=1)
-        if "hoy" in m:
-            base = now
-        # 10:00 (aprox. America/Bogota, UTC-5) = 15:00 UTC
+        base = now if "hoy" in message.lower() else now + timedelta(days=1)
         return datetime.combine(base.date(), time(15, 0), tzinfo=timezone.utc)
 
     def _meeting_args(self, message: str) -> dict[str, Any]:
@@ -93,6 +95,36 @@ class DevAgentLLM:
         if m:
             subject = m.group(2).strip().rstrip(".")[:120]
         return {"to": to, "subject": subject, "body": message}
+
+    def _project_args(self, message: str) -> dict[str, Any]:
+        name = "Nuevo proyecto"
+        area = ""
+        m = re.search(r"proyecto\s+(?:llamado\s+)?(.+?)\s+(?:en|para)\s+(?:el área\s+|el area\s+)?(.+)", message, re.IGNORECASE)
+        if m:
+            name = m.group(1).strip()
+            area = m.group(2).strip()
+        else:
+            m2 = re.search(r"proyecto\s+(?:llamado\s+)?(.+)", message, re.IGNORECASE)
+            if m2:
+                name = m2.group(1).strip()
+        return {"name": name.rstrip(".")[:200], "area_name": area.rstrip(".")}
+
+    def _task_args(self, message: str) -> dict[str, Any]:
+        title = "Nueva tarea"
+        project = ""
+        m = re.search(
+            r"tarea\s+(?:llamada\s+)?(.+?)\s+(?:en|al|para)\s+(?:el\s+)?(?:proyecto\s+)?(.+)",
+            message,
+            re.IGNORECASE,
+        )
+        if m:
+            title = m.group(1).strip()
+            project = m.group(2).strip()
+        else:
+            m2 = re.search(r"tarea\s+(?:llamada\s+)?(.+)", message, re.IGNORECASE)
+            if m2:
+                title = m2.group(1).strip()
+        return {"title": title.rstrip(".")[:300], "project_name": project.rstrip(".")}
 
     # --- redacción ---
     def compose_projects_status(self, data: list[dict[str, Any]]) -> str:
@@ -140,6 +172,19 @@ class DevAgentLLM:
             lines.append(f"• Última actividad: {data['recent']}")
         return "\n".join(lines)
 
+    def compose_knowledge(self, data: list[dict[str, Any]]) -> str:
+        if not data:
+            return "No encontré información relevante en los documentos de tus proyectos."
+        lines = ["Según los documentos:"]
+        for item in data[:3]:
+            snippet = " ".join(item["content"].split())
+            if len(snippet) > 240:
+                snippet = snippet[:240] + "…"
+            lines.append(f"• {snippet}")
+        sources = sorted({item["document_title"] for item in data})
+        lines.append("Fuentes: " + ", ".join(sources))
+        return "\n".join(lines)
+
     def compose_meeting_proposal(self, args: dict[str, Any]) -> str:
         attendees = ", ".join(args["attendees"]) if args["attendees"] else "(sin asistentes)"
         when = args["when"].replace("T", " ").replace("+00:00", " UTC")
@@ -157,6 +202,22 @@ class DevAgentLLM:
             "Pulsa «Confirmar» para enviarlo."
         )
 
+    def compose_project_proposal(self, args: dict[str, Any]) -> str:
+        area = args["area_name"] or "(área no indicada)"
+        return (
+            "Voy a crear este proyecto (requiere tu confirmación):\n"
+            f"• Nombre: {args['name']}\n• Área: {area}\n"
+            "Pulsa «Confirmar» para crearlo."
+        )
+
+    def compose_task_proposal(self, args: dict[str, Any]) -> str:
+        project = args["project_name"] or "(proyecto no indicado)"
+        return (
+            "Voy a crear esta tarea (requiere tu confirmación):\n"
+            f"• Título: {args['title']}\n• Proyecto: {project}\n"
+            "Pulsa «Confirmar» para crearla."
+        )
+
     def compose_meeting_result(self, result: dict[str, Any]) -> str:
         return f"✅ Reunión creada: «{result['title']}». Enlace de Meet: {result['meet_url']}"
 
@@ -164,15 +225,12 @@ class DevAgentLLM:
         to = ", ".join(result.get("to", [])) or "(sin destinatario)"
         return f"✅ Correo enviado (simulado) a {to} — asunto: «{result['subject']}»."
 
-    def compose_knowledge(self, data: list[dict[str, Any]]) -> str:
-        if not data:
-            return "No encontré información relevante en los documentos de tus proyectos."
-        lines = ["Según los documentos:"]
-        for item in data[:3]:
-            snippet = " ".join(item["content"].split())
-            if len(snippet) > 240:
-                snippet = snippet[:240] + "…"
-            lines.append(f"• {snippet}")
-        sources = sorted({item["document_title"] for item in data})
-        lines.append("Fuentes: " + ", ".join(sources))
-        return "\n".join(lines)
+    def compose_project_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear el proyecto: {result.get('error', 'error desconocido')}"
+        return f"✅ Proyecto «{result['name']}» creado en {result['area']}."
+
+    def compose_task_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear la tarea: {result.get('error', 'error desconocido')}"
+        return f"✅ Tarea «{result['title']}» creada en {result['project']}."

@@ -1,14 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Cloud, FileText, RefreshCw } from "lucide-react";
 
-import {
-  type GoogleDocument,
-  googleConnect,
-  googleDisconnect,
-  googleStatus,
-  listGoogleDocuments,
-  syncGoogle,
-} from "../api/google";
+import { type GoogleDocument, googleStatus, listGoogleDocuments, syncGoogle } from "../api/google";
 import { Badge, Button, Card, Spinner } from "./ui";
 
 interface Props {
@@ -50,17 +43,10 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
   });
 
   const connected = statusQuery.data?.connected ?? false;
-  const connect = useMutation({
-    mutationFn: googleConnect,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["google-status"] }),
-  });
-  const disconnect = useMutation({
-    mutationFn: googleDisconnect,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["google-status"] }),
-  });
   const sync = useMutation({
     mutationFn: () => syncGoogle(projectId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId, "google-docs"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["project", projectId, "google-docs"] }),
   });
 
   const docs = docsQuery.data ?? [];
@@ -74,62 +60,59 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
           <Cloud className="h-5 w-5 text-slate-700" />
           <h2 className="text-sm font-semibold text-slate-700">Google Workspace</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge tone={connected ? "success" : "neutral"}>
-            {connected ? "Conectado" : "Sin conectar"}
-          </Badge>
-          {canEdit &&
-            (connected ? (
-              <Button size="sm" variant="secondary" onClick={() => disconnect.mutate()}>
-                Desconectar
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>
-                Conectar Google
-              </Button>
-            ))}
-        </div>
+        <Badge tone={connected ? "success" : "neutral"}>
+          {connected ? "Conectado" : "Sin conectar"}
+        </Badge>
       </div>
 
-      {canEdit && (
-        <div className="mb-4">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => sync.mutate()}
-            disabled={sync.isPending}
-          >
-            <RefreshCw className="h-4 w-4" />
-            {sync.isPending ? "Sincronizando…" : "Sincronizar Drive y Calendar"}
-          </Button>
-        </div>
-      )}
-
-      {docsQuery.isLoading ? (
-        <Spinner label="Cargando…" />
-      ) : docs.length === 0 ? (
+      {!connected ? (
         <p className="text-sm text-slate-400">
-          Sin documentos. Sincroniza para traer archivos de Drive y eventos de Calendar del proyecto.
+          Conecta tu cuenta de Google desde la barra lateral para sincronizar Drive y Calendar de
+          este proyecto.
         </p>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div>
-            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              <FileText className="h-3.5 w-3.5" /> Drive
-            </h3>
-            <ul className="space-y-2">
-              <DocList docs={drive} />
-            </ul>
-          </div>
-          <div>
-            <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              <Calendar className="h-3.5 w-3.5" /> Calendar
-            </h3>
-            <ul className="space-y-2">
-              <DocList docs={calendar} />
-            </ul>
-          </div>
-        </div>
+        <>
+          {canEdit && (
+            <div className="mb-4">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => sync.mutate()}
+                disabled={sync.isPending}
+              >
+                <RefreshCw className="h-4 w-4" />
+                {sync.isPending ? "Sincronizando…" : "Sincronizar Drive y Calendar"}
+              </Button>
+            </div>
+          )}
+
+          {docsQuery.isLoading ? (
+            <Spinner label="Cargando…" />
+          ) : docs.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              Sin documentos. Sincroniza para traer archivos de Drive y eventos de Calendar.
+            </p>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <FileText className="h-3.5 w-3.5" /> Drive
+                </h3>
+                <ul className="space-y-2">
+                  <DocList docs={drive} />
+                </ul>
+              </div>
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <Calendar className="h-3.5 w-3.5" /> Calendar
+                </h3>
+                <ul className="space-y-2">
+                  <DocList docs={calendar} />
+                </ul>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </Card>
   );

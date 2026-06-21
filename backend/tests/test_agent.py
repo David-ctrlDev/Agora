@@ -50,3 +50,30 @@ async def test_agent_conversations_are_private(client, session):
 
     await login(client, user_b.id)
     assert (await client.get(f"/api/agent/conversations/{conv_id}/messages")).status_code == 404
+
+
+async def test_agent_creates_project_and_task(client, session):
+    await create_area(session, "IT", "it")
+    admin = await create_user(session, "admin@invesa.com", "Admin", role="admin")
+    await login(client, admin.id)
+    conv = (await client.post("/api/agent/conversations", json={})).json()["id"]
+
+    created = await client.post(
+        f"/api/agent/conversations/{conv}/messages",
+        json={"content": "crea el proyecto Innovacion en IT"},
+    )
+    action = created.json()["action"]
+    assert action["action_type"] == "create_project"
+    confirmed = await client.post(f"/api/agent/actions/{action['id']}/confirm")
+    assert "creado en IT" in confirmed.json()["content"]
+    assert any(p["name"] == "Innovacion" for p in (await client.get("/api/projects")).json())
+
+    task_msg = await client.post(
+        f"/api/agent/conversations/{conv}/messages",
+        json={"content": "crea una tarea Revisar contratos en el proyecto Innovacion"},
+    )
+    task_action = task_msg.json()["action"]
+    assert task_action["action_type"] == "create_task"
+    task_confirmed = await client.post(f"/api/agent/actions/{task_action['id']}/confirm")
+    assert "Tarea" in task_confirmed.json()["content"]
+
