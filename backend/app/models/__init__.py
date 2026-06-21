@@ -3,6 +3,8 @@
 from app.models.area import Area
 from app.models.github_event import GitHubEvent
 from app.models.github_repo import GitHubRepo
+from app.models.google_document import GoogleDocument
+from app.models.oauth_token import OAuthToken
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.task import Task
@@ -14,6 +16,8 @@ __all__ = [
     "Area",
     "GitHubEvent",
     "GitHubRepo",
+    "GoogleDocument",
+    "OAuthToken",
     "Project",
     "ProjectMember",
     "Task",
