@@ -23,6 +23,7 @@ def _to_read(project: Project, area_name: str | None, owner_name: str | None) ->
         owner_id=project.owner_id,
         start_date=project.start_date,
         due_date=project.due_date,
+        progress=project.progress,
         created_at=project.created_at,
         updated_at=project.updated_at,
         area_name=area_name,
@@ -94,6 +95,7 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
         owner_id=user.id,
         start_date=payload.start_date,
         due_date=payload.due_date,
+        progress=payload.progress,
     )
     db.add(project)
     await db.flush()

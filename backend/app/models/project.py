@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -23,6 +23,7 @@ class Project(Base):
     )
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     estimated_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     actual_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     expected_benefit: Mapped[float | None] = mapped_column(Float, nullable=True)

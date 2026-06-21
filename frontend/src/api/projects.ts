@@ -21,6 +21,7 @@ export interface Project {
   owner_id: number | null;
   start_date: string | null;
   due_date: string | null;
+  progress: number;
   created_at: string;
   updated_at: string;
   area_name: string | null;
@@ -32,15 +33,19 @@ export interface ProjectCreate {
   area_id: number;
   status?: ProjectStatus;
   description?: string | null;
+  start_date?: string | null;
   due_date?: string | null;
+  progress?: number;
 }
 
 export interface ProjectUpdate {
   name?: string;
   status?: ProjectStatus;
   description?: string | null;
+  start_date?: string | null;
   due_date?: string | null;
   owner_id?: number | null;
+  progress?: number;
 }
 
 export interface ProjectMember {

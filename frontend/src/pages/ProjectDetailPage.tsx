@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Trash2, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -22,7 +22,7 @@ import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
 import SprintsPanel from "../components/SprintsPanel";
 import TasksBoard from "../components/TasksBoard";
-import { Badge, Button, Card, PageHeader, Select, Spinner } from "../components/ui";
+import { Badge, Button, Card, Input, PageHeader, Select, Spinner } from "../components/ui";
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -65,6 +65,21 @@ export default function ProjectDetailPage() {
 
   const [newMemberId, setNewMemberId] = useState<number | "">("");
   const [newMemberRole, setNewMemberRole] = useState("editor");
+
+  const [plan, setPlan] = useState({ progress: "", start: "", due: "" });
+  useEffect(() => {
+    const p = projectQuery.data;
+    if (p) setPlan({ progress: String(p.progress ?? 0), start: p.start_date ?? "", due: p.due_date ?? "" });
+  }, [projectQuery.data]);
+  const savePlan = useMutation({
+    mutationFn: () =>
+      updateProject(projectId, {
+        progress: plan.progress === "" ? 0 : Number(plan.progress),
+        start_date: plan.start || null,
+        due_date: plan.due || null,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
+  });
 
   if (projectQuery.isLoading) return <Spinner label="Cargando proyecto…" />;
   if (projectQuery.isError || !projectQuery.data) {
@@ -160,6 +175,45 @@ export default function ProjectDetailPage() {
                 </option>
               ))}
             </Select>
+          </div>
+        </Card>
+      )}
+
+      {canEdit && (
+        <Card className="p-5">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Planificación y avance</h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Input
+              label="Avance (%)"
+              type="number"
+              min="0"
+              max="100"
+              value={plan.progress}
+              onChange={(e) => setPlan({ ...plan, progress: e.target.value })}
+            />
+            <Input
+              label="Inicio"
+              type="date"
+              value={plan.start}
+              onChange={(e) => setPlan({ ...plan, start: e.target.value })}
+            />
+            <Input
+              label="Entrega"
+              type="date"
+              value={plan.due}
+              onChange={(e) => setPlan({ ...plan, due: e.target.value })}
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <Button size="sm" onClick={() => savePlan.mutate()} disabled={savePlan.isPending}>
+              {savePlan.isPending ? "Guardando…" : "Guardar"}
+            </Button>
+            <div className="h-1.5 flex-1 rounded-full bg-slate-100">
+              <div
+                className="h-1.5 rounded-full bg-brand-500"
+                style={{ width: `${Math.min(100, Number(plan.progress) || 0)}%` }}
+              />
+            </div>
           </div>
         </Card>
       )}

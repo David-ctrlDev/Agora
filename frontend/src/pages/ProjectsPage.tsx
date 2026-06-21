@@ -22,6 +22,11 @@ const STATUS_ACCENT: Record<string, string> = {
 };
 const VIEW_KEY = "agora-projects-view";
 
+function fmtDate(d: string | null): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
@@ -31,6 +36,7 @@ export default function ProjectsPage() {
   const [name, setName] = useState("");
   const [areaId, setAreaId] = useState<number | "">("");
   const [status, setStatus] = useState<ProjectStatus>("planned");
+  const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
 
@@ -53,6 +59,7 @@ export default function ProjectsPage() {
       setName("");
       setAreaId("");
       setStatus("planned");
+      setStartDate("");
       setDueDate("");
       setDescription("");
     },
@@ -65,6 +72,7 @@ export default function ProjectsPage() {
       name: name.trim(),
       area_id: Number(areaId),
       status,
+      start_date: startDate || null,
       due_date: dueDate || null,
       description: description.trim() || null,
     });
@@ -129,12 +137,10 @@ export default function ProjectsPage() {
                   </option>
                 ))}
               </Select>
-              <Input
-                label="Fecha de entrega"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Inicio" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <Input label="Entrega" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </div>
             </div>
             <Input
               label="Descripción (opcional)"
@@ -155,7 +161,6 @@ export default function ProjectsPage() {
         </Card>
       )}
 
-      {/* Barra de filtros + toggle de vista */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -236,12 +241,19 @@ export default function ProjectsPage() {
                         {p.description && (
                           <p className="mb-3 line-clamp-2 text-sm text-slate-500">{p.description}</p>
                         )}
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <div className="mb-3">
+                          <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+                            <span>Avance</span>
+                            <span className="tabular-nums">{p.progress}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-slate-100">
+                            <div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${p.progress}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
                           <Badge tone="neutral">{p.area_name}</Badge>
                           {p.owner_name && <span>· {p.owner_name}</span>}
-                          {p.due_date && (
-                            <span>· vence {new Date(p.due_date).toLocaleDateString("es-CO")}</span>
-                          )}
+                          <span className="w-full">📅 {fmtDate(p.start_date)} → {fmtDate(p.due_date)}</span>
                         </div>
                       </div>
                     </Card>
@@ -270,11 +282,15 @@ export default function ProjectsPage() {
                         {p.owner_name && ` · ${p.owner_name}`}
                       </div>
                     </div>
-                    {p.due_date && (
-                      <span className="hidden shrink-0 text-xs text-slate-400 sm:block">
-                        {new Date(p.due_date).toLocaleDateString("es-CO")}
-                      </span>
-                    )}
+                    <div className="hidden w-28 shrink-0 sm:block">
+                      <div className="mb-0.5 text-right text-xs tabular-nums text-slate-400">{p.progress}%</div>
+                      <div className="h-1.5 rounded-full bg-slate-100">
+                        <div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${p.progress}%` }} />
+                      </div>
+                    </div>
+                    <div className="hidden shrink-0 text-xs text-slate-400 md:block">
+                      {fmtDate(p.start_date)} → {fmtDate(p.due_date)}
+                    </div>
                     <Badge tone={st.tone}>{st.label}</Badge>
                   </Link>
                 );
