@@ -5,6 +5,11 @@ const apiProxyTarget = process.env.VITE_API_PROXY_TARGET ?? "http://localhost:80
 
 export default defineConfig({
   plugins: [react()],
+  // Pre-optimiza las dependencias principales al arrancar para evitar el ciclo
+  // "nueva dependencia descubierta -> recarga" a media sesión (que tumbaba el dev server).
+  optimizeDeps: {
+    include: ["react", "react-dom", "react-router-dom", "@tanstack/react-query"],
+  },
   server: {
     host: true,
     port: 5173,
