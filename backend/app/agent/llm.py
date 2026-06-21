@@ -30,6 +30,24 @@ class DevAgentLLM:
             return Decision("overdue_tasks")
         if any(k in m for k in ["actividad", "github", "commit", "pull request", "release"]):
             return Decision("recent_activity")
+        if any(
+            k in m
+            for k in [
+                "documento",
+                "acta",
+                "según",
+                "segun",
+                "qué dice",
+                "que dice",
+                "procedimiento",
+                "política",
+                "politica",
+                "manual",
+                "norma",
+                "busca",
+            ]
+        ):
+            return Decision("knowledge", {"message": message})
         if any(k in m for k in ["resumen", "resume", "estado de", "cómo va", "como va", "situaci"]):
             return Decision("project_summary", {"message": message})
         return Decision("projects_status")
@@ -145,3 +163,16 @@ class DevAgentLLM:
     def compose_email_result(self, result: dict[str, Any]) -> str:
         to = ", ".join(result.get("to", [])) or "(sin destinatario)"
         return f"✅ Correo enviado (simulado) a {to} — asunto: «{result['subject']}»."
+
+    def compose_knowledge(self, data: list[dict[str, Any]]) -> str:
+        if not data:
+            return "No encontré información relevante en los documentos de tus proyectos."
+        lines = ["Según los documentos:"]
+        for item in data[:3]:
+            snippet = " ".join(item["content"].split())
+            if len(snippet) > 240:
+                snippet = snippet[:240] + "…"
+            lines.append(f"• {snippet}")
+        sources = sorted({item["document_title"] for item in data})
+        lines.append("Fuentes: " + ", ".join(sources))
+        return "\n".join(lines)

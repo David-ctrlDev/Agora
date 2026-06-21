@@ -82,6 +82,8 @@ async def _run_read(db: AsyncSession, user: User, decision: Decision) -> tuple[s
         return "overdue_tasks", await tools.overdue_tasks(db, user)
     if intent == "recent_activity":
         return "recent_activity", await tools.recent_activity(db, user)
+    if intent == "knowledge":
+        return "knowledge", await tools.knowledge_search(db, user, decision.args.get("message", ""))
     if intent == "project_summary":
         summary = await tools.project_summary(db, user, decision.args.get("message", ""))
         if summary is None:

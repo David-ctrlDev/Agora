@@ -13,6 +13,7 @@ dependencies = [
     "alembic>=1.14",
     "pyjwt>=2.13.0",
     "cryptography>=49.0.0",
+    "pgvector>=0.4.2",
 ]
 
 [dependency-groups]

@@ -10,11 +10,13 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.models.area import Area
+from app.models.document import Document
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.task import Task
 from app.models.user import User
 from app.models.user_area import UserArea
+from app.services.knowledge import ingest_document
 
 DEV_USERS: list[dict] = [
     {"email": "wserna@invesa.com", "name": "Wilder Serna", "role": "admin", "areas": []},
@@ -77,6 +79,38 @@ DEV_TASKS: list[dict] = [
     {"project": "Campaña comercial Q3", "title": "Definir presupuesto", "status": "todo", "priority": "medium", "assignee": "carlos@invesa.com"},
     {"project": "Migración ERP", "title": "Mapear procesos", "status": "done", "priority": "medium", "assignee": "wserna@invesa.com"},
     {"project": "Migración ERP", "title": "Plan de migración", "status": "blocked", "priority": "high", "assignee": "wserna@invesa.com"},
+]
+
+
+DEV_DOCS: list[dict] = [
+    {
+        "project": "Renovación planta norte",
+        "title": "Acta de inicio",
+        "content": (
+            "La renovación de la planta norte busca modernizar tres líneas de producción.\n\n"
+            "El presupuesto aprobado es de 1.200 millones. El proveedor principal de maquinaria "
+            "es AgroTech. Los permisos municipales son el principal riesgo y pueden bloquear el "
+            "cronograma.\n\nLa fecha objetivo de entrega es septiembre de 2026."
+        ),
+    },
+    {
+        "project": "Auditoría ambiental 2026",
+        "title": "Alcance de la auditoría",
+        "content": (
+            "La auditoría ambiental 2026 cubre vertimientos, residuos peligrosos y emisiones "
+            "atmosféricas.\n\nSe revisarán los permisos ambientales vigentes y las evidencias de "
+            "cumplimiento. El informe preliminar debe entregarse antes del 15 de julio."
+        ),
+    },
+    {
+        "project": "Migración ERP",
+        "title": "Plan de migración ERP",
+        "content": (
+            "La migración del ERP corporativo se hará en tres fases: análisis, configuración y "
+            "salida en vivo.\n\nEl proyecto está en pausa a la espera de aprobación presupuestal. "
+            "El mapeo de procesos ya está terminado."
+        ),
+    },
 ]
 
 
@@ -155,7 +189,30 @@ async def main() -> None:
             created_tasks += 1
 
         await db.commit()
-        print(f"Seed completado. Tareas creadas: {created_tasks}")
+
+        projects_by_name = {
+            p.name: p for p in (await db.execute(select(Project))).scalars().all()
+        }
+        created_docs = 0
+        for spec in DEV_DOCS:
+            project = projects_by_name.get(spec["project"])
+            if project is None:
+                continue
+            already = (
+                await db.execute(
+                    select(Document).where(
+                        Document.project_id == project.id, Document.title == spec["title"]
+                    )
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                continue
+            await ingest_document(db, project.id, spec["title"], spec["content"])
+            created_docs += 1
+
+        print(
+            f"Seed completado. Tareas creadas: {created_tasks}, documentos: {created_docs}"
+        )
 
 
 if __name__ == "__main__":

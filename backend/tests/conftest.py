@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import app.models  # noqa: F401  (registra todos los modelos en Base.metadata)
 from app.core import db as db_module
-from app.core.db import Base
+from app.core.db import Base, register_pgvector
 from app.main import app
 
 TEST_DB_URL = "postgresql+asyncpg://agora:agora@db:5432/agora_test"
@@ -28,8 +28,11 @@ async def engine() -> AsyncGenerator[AsyncEngine, None]:
 
     eng = create_async_engine(TEST_DB_URL)
     async with eng.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+    await eng.dispose()  # cierra conexiones creadas antes de registrar el códec
+    register_pgvector(eng)
     yield eng
     await eng.dispose()
 

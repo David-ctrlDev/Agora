@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.routers import agent, areas, auth, comments, github, google, projects, tasks, users
+from app.routers import (
+    agent,
+    areas,
+    auth,
+    comments,
+    github,
+    google,
+    knowledge,
+    projects,
+    tasks,
+    users,
+)
 
 app = FastAPI(title=settings.app_name)
 
@@ -12,6 +23,7 @@ app.include_router(tasks.router)
 app.include_router(comments.router)
 app.include_router(github.router)
 app.include_router(google.router)
+app.include_router(knowledge.router)
 app.include_router(agent.router)
 app.include_router(users.router)
 

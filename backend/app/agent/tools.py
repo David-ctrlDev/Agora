@@ -147,3 +147,10 @@ async def project_summary(db: AsyncSession, user: User, message: str) -> dict[st
         "members": int(members),
         "recent": f"[{recent_for['type']}] {recent_for['title']}" if recent_for else None,
     }
+
+
+async def knowledge_search(db: AsyncSession, user: User, query: str) -> list[dict[str, Any]]:
+    from app.services import knowledge as knowledge_service
+
+    project_ids = await _accessible_project_ids(db, user)
+    return await knowledge_service.search(db, query, project_ids, k=4)

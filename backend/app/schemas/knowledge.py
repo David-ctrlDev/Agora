@@ -1,0 +1,29 @@
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class DocumentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    content: str = Field(min_length=1)
+
+
+class DocumentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    project_id: int
+    title: str
+    source: str
+    created_at: datetime
+
+
+class SearchQuery(BaseModel):
+    query: str = Field(min_length=1, max_length=1000)
+
+
+class SearchResult(BaseModel):
+    content: str
+    document_title: str
+    project_id: int
+    distance: float

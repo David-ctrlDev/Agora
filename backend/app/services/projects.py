@@ -30,6 +30,16 @@ def _to_read(project: Project, area_name: str | None, owner_name: str | None) ->
     )
 
 
+async def accessible_project_ids(db: AsyncSession, user: User) -> list[int]:
+    """IDs de proyectos accesibles por el usuario (área o membresía de proyecto)."""
+    area_ids = await get_user_area_ids(db, user)
+    stmt = select(Project.id)
+    if area_ids is not None:
+        member_pids = select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
+        stmt = stmt.where(or_(Project.area_id.in_(area_ids), Project.id.in_(member_pids)))
+    return [row[0] for row in (await db.execute(stmt)).all()]
+
+
 async def list_projects(db: AsyncSession, user: User) -> list[ProjectRead]:
     stmt = (
         select(Project, Area.name, User.name)
