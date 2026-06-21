@@ -22,6 +22,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // Los bind-mounts de Docker en Windows no emiten eventos de archivo;
+    // con polling el HMR detecta los cambios sin reiniciar el contenedor.
+    watch: { usePolling: true, interval: 300 },
     proxy: {
       "/api": {
         target: apiProxyTarget,
