@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     # Al crear un proyecto se crea/vincula un repositorio de forma transparente (sin UI).
     github_autocreate_repo: bool = True
     google_provider: str = "mock"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_oauth_redirect_uri: str = "http://localhost:5173/api/auth/google/callback"
+    google_oauth_scopes: str = (
+        "openid email profile "
+        "https://www.googleapis.com/auth/directory.readonly "
+        "https://www.googleapis.com/auth/calendar.events "
+        "https://www.googleapis.com/auth/drive.readonly "
+        "https://www.googleapis.com/auth/gmail.send"
+    )
     gemini_provider: str = "mock"
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-flash-latest"

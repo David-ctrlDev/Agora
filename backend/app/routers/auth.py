@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.core.security import create_session_token
+from app.integrations.google import oauth as google_oauth
 from app.models.user import User
 from app.schemas.auth import AreaMembership, CurrentUser, DevLoginRequest, DevUser
 from app.services import auth as auth_service
+from app.services import google as google_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -76,3 +81,36 @@ async def dev_login(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
     _set_session_cookie(response, user.id)
     return await _current_user_payload(db, user)
+
+
+# --- Conexión OAuth real con Google (por usuario) ---
+
+
+@router.get("/google/login")
+async def google_login(user: User = Depends(get_current_user)) -> RedirectResponse:
+    if settings.google_provider != "real" or not settings.google_client_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google no configurado")
+    state = secrets.token_urlsafe(24)
+    response = RedirectResponse(google_oauth.authorize_url(state))
+    response.set_cookie(
+        "g_oauth_state", state, max_age=600, httponly=True,
+        secure=settings.session_cookie_secure, samesite="lax", path="/",
+    )
+    return response
+
+
+@router.get("/google/callback")
+async def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RedirectResponse:
+    if not code or not state or state != request.cookies.get("g_oauth_state"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado OAuth inválido")
+    token = await google_oauth.exchange_code(code)
+    await google_service.store_real_token(db, user, token)
+    response = RedirectResponse("/inicio")
+    response.delete_cookie("g_oauth_state", path="/")
+    return response

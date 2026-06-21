@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import nullslast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.crypto import encrypt
 from app.integrations.google.factory import get_google_provider
 from app.models.google_document import GoogleDocument
@@ -23,7 +24,38 @@ async def get_token(db: AsyncSession, user_id: int) -> OAuthToken | None:
 
 async def status(db: AsyncSession, user: User) -> dict[str, object]:
     token = await get_token(db, user.id)
-    return {"connected": token is not None, "scopes": token.scopes if token else None}
+    return {
+        "connected": token is not None,
+        "scopes": token.scopes if token else None,
+        "provider": settings.google_provider,
+    }
+
+
+async def store_real_token(db: AsyncSession, user: User, token_data: dict) -> None:
+    """Guarda (cifrado) el token OAuth real del usuario tras autorizar en Google."""
+    existing = await get_token(db, user.id)
+    access = encrypt(token_data["access_token"])
+    refresh_raw = token_data.get("refresh_token")
+    scopes = token_data.get("scope", "")
+    expires = datetime.now(timezone.utc) + timedelta(seconds=int(token_data.get("expires_in", 3600)))
+    if existing is not None:
+        existing.access_token = access
+        if refresh_raw:
+            existing.refresh_token = encrypt(refresh_raw)
+        existing.scopes = scopes
+        existing.expires_at = expires
+    else:
+        db.add(
+            OAuthToken(
+                user_id=user.id,
+                provider="google",
+                access_token=access,
+                refresh_token=encrypt(refresh_raw or ""),
+                scopes=scopes,
+                expires_at=expires,
+            )
+        )
+    await db.commit()
 
 
 async def connect_dev(db: AsyncSession, user: User) -> None:

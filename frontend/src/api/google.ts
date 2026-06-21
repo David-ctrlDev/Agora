@@ -3,6 +3,7 @@ import { api } from "./client";
 export interface GoogleStatus {
   connected: boolean;
   scopes: string | null;
+  provider?: string;
 }
 
 export interface GoogleDocument {

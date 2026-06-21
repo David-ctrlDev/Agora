@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class GoogleStatus(BaseModel):
     connected: bool
     scopes: str | None = None
+    provider: str = "mock"
 
 
 class MeetingCreate(BaseModel):
