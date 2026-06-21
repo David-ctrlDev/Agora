@@ -1,0 +1,27 @@
+# Entorno / secretos
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+*.log
+
+# Datos locales (por si se montan en bind en vez de volumen)
+postgres_data/
+n8n_data/
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
