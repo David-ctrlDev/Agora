@@ -22,7 +22,7 @@ import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
 import SprintsPanel from "../components/SprintsPanel";
 import TasksBoard from "../components/TasksBoard";
-import { Badge, Button, Card, Input, PageHeader, Select, Spinner } from "../components/ui";
+import { Badge, Button, Card, Input, PageHeader, Select, Spinner, Textarea } from "../components/ui";
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
@@ -67,9 +67,13 @@ export default function ProjectDetailPage() {
   const [newMemberRole, setNewMemberRole] = useState("editor");
 
   const [plan, setPlan] = useState({ progress: "", start: "", due: "" });
+  const [desc, setDesc] = useState("");
   useEffect(() => {
     const p = projectQuery.data;
-    if (p) setPlan({ progress: String(p.progress ?? 0), start: p.start_date ?? "", due: p.due_date ?? "" });
+    if (p) {
+      setPlan({ progress: String(p.progress ?? 0), start: p.start_date ?? "", due: p.due_date ?? "" });
+      setDesc(p.description ?? "");
+    }
   }, [projectQuery.data]);
   const savePlan = useMutation({
     mutationFn: () =>
@@ -78,6 +82,10 @@ export default function ProjectDetailPage() {
         start_date: plan.start || null,
         due_date: plan.due || null,
       }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
+  });
+  const saveDesc = useMutation({
+    mutationFn: () => updateProject(projectId, { description: desc.trim() || null }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
   });
 
@@ -147,6 +155,23 @@ export default function ProjectDetailPage() {
           </span>
         )}
       </div>
+
+      {canEdit && (
+        <Card className="p-5">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Descripción</h2>
+          <Textarea
+            rows={3}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="Describe el objetivo, alcance o contexto del proyecto…"
+          />
+          <div className="mt-3 flex justify-end">
+            <Button size="sm" onClick={() => saveDesc.mutate()} disabled={saveDesc.isPending}>
+              {saveDesc.isPending ? "Guardando…" : "Guardar descripción"}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {canEdit && (
         <Card className="p-5">

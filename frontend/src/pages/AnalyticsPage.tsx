@@ -104,6 +104,8 @@ export default function AnalyticsPage() {
   const [fStatus, setFStatus] = useState("");
   const [fCrit, setFCrit] = useState("");
   const [fCat, setFCat] = useState("");
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
 
   const all = query.data?.projects ?? [];
   const areaOpts = useMemo(() => uniques(all, (p) => p.area_name), [all]);
@@ -118,20 +120,24 @@ export default function AnalyticsPage() {
           (!fArea || p.area_name === fArea) &&
           (!fStatus || p.status === fStatus) &&
           (!fCrit || (p.criticality ?? "") === fCrit) &&
-          (!fCat || (p.category ?? "") === fCat),
+          (!fCat || (p.category ?? "") === fCat) &&
+          (!fFrom || (p.due_date != null && p.due_date >= fFrom)) &&
+          (!fTo || (p.due_date != null && p.due_date <= fTo)),
       ),
-    [all, fArea, fStatus, fCrit, fCat],
+    [all, fArea, fStatus, fCrit, fCat, fFrom, fTo],
   );
 
   if (query.isLoading) return <Spinner label="Cargando analítica…" />;
   if (!query.data) return null;
 
-  const hasFilter = fArea || fStatus || fCrit || fCat;
+  const hasFilter = fArea || fStatus || fCrit || fCat || fFrom || fTo;
   const clear = () => {
     setFArea("");
     setFStatus("");
     setFCrit("");
     setFCat("");
+    setFFrom("");
+    setFTo("");
   };
 
   const sum = (pick: (p: ProjectAnalytics) => number) => filtered.reduce((s, p) => s + pick(p), 0);
@@ -225,6 +231,26 @@ export default function AnalyticsPage() {
               <option key={c} value={c}>{c}</option>
             ))}
           </Select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Entrega</label>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={fFrom}
+              onChange={(e) => setFFrom(e.target.value)}
+              title="Entrega desde"
+              className="h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-sm text-slate-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            />
+            <span className="text-slate-400">–</span>
+            <input
+              type="date"
+              value={fTo}
+              onChange={(e) => setFTo(e.target.value)}
+              title="Entrega hasta"
+              className="h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-sm text-slate-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            />
+          </div>
         </div>
         {hasFilter && (
           <button
