@@ -225,7 +225,19 @@ async def _run_gemini(
     )
     await db.flush()
 
-    block = _attachments_context(attachments)
+    # Inyecta el contenido de TODOS los documentos de la conversación (no solo los de
+    # este mensaje) para que el agente conserve el contexto y no haya que re-adjuntar.
+    # Recientes primero (por si hay que truncar al presupuesto) y sin duplicar por nombre,
+    # de modo que re-adjuntar el mismo archivo no malgaste contexto.
+    conv_attachments = await list_attachments(db, conversation.id)
+    seen: set[str] = set()
+    unique: list[AgentAttachment] = []
+    for a in reversed(conv_attachments):
+        if a.name in seen:
+            continue
+        seen.add(a.name)
+        unique.append(a)
+    block = _attachments_context(unique)
     model_input = f"{block}\n\n---\n\n{content}" if block else content
     text, action = await gemini_runner.run_turn(db, user, model_input, history)
     assistant = AgentMessage(conversation_id=conversation.id, role="assistant", content=text)

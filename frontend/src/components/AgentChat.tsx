@@ -28,6 +28,7 @@ import {
   createConversation,
   deleteAttachment,
   deleteConversation,
+  listAttachments,
   listConversations,
   listMessages,
   sendMessage,
@@ -153,6 +154,11 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const conversationsQuery = useQuery({ queryKey: ["agent-convs"], queryFn: listConversations });
   const googleQuery = useQuery({ queryKey: ["google-status"], queryFn: googleStatus });
   const driveConnected = googleQuery.data?.connected ?? false;
+  const contextDocsQuery = useQuery({
+    queryKey: ["agent-attachments", conversationId],
+    queryFn: () => listAttachments(conversationId as number),
+    enabled: conversationId !== null,
+  });
 
   // Al abrir por primera vez, retomamos la conversación más reciente. Pero solo
   // una vez: si el usuario pulsa «Nuevo» (id = null) dejamos ver el inicio en
@@ -196,6 +202,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
       // Esperamos a que el historial se recargue antes de quitar el mensaje
       // optimista, para que no parpadee ni "salte".
       await queryClient.invalidateQueries({ queryKey: ["agent-msgs"] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-attachments"] });
       setPending(null);
     },
     onError: () => setPending(null),
@@ -211,7 +218,10 @@ export default function AgentChat({ className = "" }: { className?: string }) {
       const cid = await ensureConversation();
       return uploadAttachment(cid, file);
     },
-    onSuccess: (att) => setAttachments((a) => [...a, att]),
+    onSuccess: (att) => {
+      setAttachments((a) => [...a, att]);
+      void queryClient.invalidateQueries({ queryKey: ["agent-attachments"] });
+    },
   });
 
   const attachDrive = useMutation({
@@ -222,12 +232,16 @@ export default function AgentChat({ className = "" }: { className?: string }) {
     onSuccess: (att) => {
       setAttachments((a) => [...a, att]);
       setShowDrive(false);
+      void queryClient.invalidateQueries({ queryKey: ["agent-attachments"] });
     },
   });
 
   const removeAttachment = useMutation({
     mutationFn: deleteAttachment,
-    onSuccess: (_data, id) => setAttachments((a) => a.filter((x) => x.id !== id)),
+    onSuccess: (_data, id) => {
+      setAttachments((a) => a.filter((x) => x.id !== id));
+      void queryClient.invalidateQueries({ queryKey: ["agent-attachments"] });
+    },
   });
 
   const attaching = upload.isPending || attachDrive.isPending;
@@ -296,6 +310,17 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const loadingHistory = conversationId !== null && messagesQuery.isLoading;
   const showEmpty = !loadingHistory && messages.length === 0 && !send.isPending;
   const canSend = (input.trim().length > 0 || attachments.length > 0) && !send.isPending && !attaching;
+
+  // Documentos que ya viven en la conversación (el agente los conserva en contexto),
+  // sin duplicar por nombre y excluyendo los que estás adjuntando ahora mismo.
+  const stagedNames = new Set(attachments.map((a) => a.name));
+  const contextDocs: Attachment[] = [];
+  const seenDocNames = new Set<string>();
+  for (const a of contextDocsQuery.data ?? []) {
+    if (stagedNames.has(a.name) || seenDocNames.has(a.name)) continue;
+    seenDocNames.add(a.name);
+    contextDocs.push(a);
+  }
 
   return (
     <div className={`flex min-h-0 flex-col bg-white ${className}`}>
@@ -440,6 +465,22 @@ export default function AgentChat({ className = "" }: { className?: string }) {
       {/* Composer */}
       <div className="border-t border-slate-200/80 bg-slate-50/60 px-4 py-3">
         <div className="mx-auto w-full max-w-3xl">
+          {contextDocs.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+              <Paperclip className="h-3 w-3 shrink-0" />
+              <span className="font-medium">En contexto:</span>
+              {contextDocs.map((d) => (
+                <span
+                  key={d.id}
+                  className="inline-flex max-w-[200px] items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-500"
+                  title={`${d.name} · el agente recuerda este documento en esta conversación`}
+                >
+                  <FileText className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{d.name}</span>
+                </span>
+              ))}
+            </div>
+          )}
           {(attachments.length > 0 || attaching) && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {attachments.map((a) => (
