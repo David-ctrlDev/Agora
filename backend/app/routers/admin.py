@@ -8,6 +8,7 @@ from app.models.area import Area
 from app.models.user import User
 from app.schemas.admin import (
     AdminAreaUpdate,
+    AdminStats,
     AdminUserCreate,
     AdminUserRead,
     AdminUserUpdate,
@@ -18,6 +19,11 @@ from app.services import admin as admin_svc
 from app.services import areas as areas_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+
+
+@router.get("/stats", response_model=AdminStats)
+async def stats(db: AsyncSession = Depends(get_db)) -> AdminStats:
+    return await admin_svc.system_stats(db)
 
 
 async def _get_user(user_id: int, db: AsyncSession) -> User:

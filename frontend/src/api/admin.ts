@@ -25,6 +25,19 @@ export interface AdminArea {
   created_at: string;
 }
 
+export interface AdminStats {
+  users: number;
+  active_users: number;
+  admins: number;
+  two_fa: number;
+  areas: number;
+  projects: number;
+  tasks: number;
+  google_provider: string;
+  gemini_provider: string;
+}
+
+export const getAdminStats = () => api.get<AdminStats>("/api/admin/stats");
 export const listAdminUsers = () => api.get<AdminUser[]>("/api/admin/users");
 export const createAdminUser = (payload: {
   email: string;

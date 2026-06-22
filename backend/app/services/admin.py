@@ -1,17 +1,41 @@
 """Servicios de administración (solo admin global)."""
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.area import Area
+from app.models.project import Project
+from app.models.task import Task
 from app.models.user import User
 from app.models.user_area import UserArea
 from app.schemas.admin import (
     AdminAreaMembership,
+    AdminStats,
     AdminUserCreate,
     AdminUserRead,
     AdminUserUpdate,
     AreaAssignment,
 )
+
+
+async def system_stats(db: AsyncSession) -> AdminStats:
+    async def count(model, *where) -> int:
+        stmt = select(func.count()).select_from(model)
+        if where:
+            stmt = stmt.where(*where)
+        return int((await db.execute(stmt)).scalar() or 0)
+
+    return AdminStats(
+        users=await count(User),
+        active_users=await count(User, User.is_active.is_(True)),
+        admins=await count(User, User.role == "admin"),
+        two_fa=await count(User, User.totp_enabled.is_(True)),
+        areas=await count(Area),
+        projects=await count(Project),
+        tasks=await count(Task),
+        google_provider=settings.google_provider,
+        gemini_provider=settings.gemini_provider,
+    )
 
 _ROLES = {"admin", "member"}
 _AREA_ROLES = {"lead", "member"}
