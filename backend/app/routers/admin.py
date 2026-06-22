@@ -58,6 +58,12 @@ async def set_user_areas(
     return await admin_svc.set_user_areas(db, user, payload.areas)
 
 
+@router.post("/users/{user_id}/reset-2fa", response_model=AdminUserRead)
+async def reset_user_2fa(user_id: int, db: AsyncSession = Depends(get_db)) -> AdminUserRead:
+    user = await _get_user(user_id, db)
+    return await admin_svc.reset_2fa(db, user)
+
+
 @router.get("/areas", response_model=list[AreaRead])
 async def list_areas(db: AsyncSession = Depends(get_db)) -> list[Area]:
     return list((await db.execute(select(Area).order_by(Area.name))).scalars().all())

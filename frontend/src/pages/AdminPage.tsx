@@ -1,33 +1,62 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, ShieldCheck, Users } from "lucide-react";
+import { Building2, Pencil, Plus, ShieldCheck, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import {
+  type AdminArea,
   type AdminUser,
   createAdminArea,
   createAdminUser,
   listAdminAreas,
   listAdminUsers,
+  resetUser2fa,
   setUserAreas,
   updateAdminArea,
   updateAdminUser,
 } from "../api/admin";
 import { useMe } from "../auth/useAuth";
-import { Badge, Button, Card, Input, Modal, PageHeader, Panel, Select, Spinner } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Modal,
+  PageHeader,
+  Panel,
+  Select,
+  Spinner,
+  Textarea,
+} from "../components/ui";
+
+const toggle = (list: number[], id: number) =>
+  list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
 function UsersTab() {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ["admin-users"], queryFn: listAdminUsers });
   const areas = useQuery({ queryKey: ["admin-areas"], queryFn: listAdminAreas });
   const invalidate = () => qc.invalidateQueries({ queryKey: ["admin-users"] });
+  const allAreas = areas.data ?? [];
 
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("member");
   const [newAreas, setNewAreas] = useState<number[]>([]);
-  const [editing, setEditing] = useState<AdminUser | null>(null);
-  const [editAreas, setEditAreas] = useState<number[]>([]);
+
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+  const [eName, setEName] = useState("");
+  const [eRole, setERole] = useState("member");
+  const [eActive, setEActive] = useState(true);
+  const [eAreas, setEAreas] = useState<number[]>([]);
+
+  const openEdit = (u: AdminUser) => {
+    setEditUser(u);
+    setEName(u.name);
+    setERole(u.role);
+    setEActive(u.is_active);
+    setEAreas(u.areas.map((a) => a.area_id));
+  };
 
   const create = useMutation({
     mutationFn: () => createAdminUser({ email: email.trim(), name: name.trim(), role, area_ids: newAreas }),
@@ -40,23 +69,23 @@ function UsersTab() {
       setNewAreas([]);
     },
   });
-  const patch = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: { role?: string; is_active?: boolean } }) =>
-      updateAdminUser(id, body),
-    onSuccess: invalidate,
-  });
-  const saveAreas = useMutation({
-    mutationFn: () => setUserAreas(editing!.id, editAreas.map((area_id) => ({ area_id, area_role: "member" }))),
+  const saveUser = useMutation({
+    mutationFn: async () => {
+      await updateAdminUser(editUser!.id, { name: eName.trim(), role: eRole, is_active: eActive });
+      return setUserAreas(editUser!.id, eAreas.map((area_id) => ({ area_id, area_role: "member" })));
+    },
     onSuccess: () => {
       invalidate();
-      setEditing(null);
+      setEditUser(null);
     },
   });
-
-  const toggle = (list: number[], id: number) =>
-    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-
-  const allAreas = areas.data ?? [];
+  const reset2fa = useMutation({
+    mutationFn: () => resetUser2fa(editUser!.id),
+    onSuccess: () => {
+      invalidate();
+      setEditUser((p) => (p ? { ...p, twofa_enabled: false } : p));
+    },
+  });
 
   if (users.isLoading) return <Spinner label="Cargando usuarios…" />;
 
@@ -121,6 +150,7 @@ function UsersTab() {
                 <th className="px-4 py-2.5">Áreas</th>
                 <th className="px-4 py-2.5">2FA</th>
                 <th className="px-4 py-2.5">Estado</th>
+                <th className="px-4 py-2.5 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -131,17 +161,12 @@ function UsersTab() {
                     <div className="text-xs text-slate-400">{u.email}</div>
                   </td>
                   <td className="px-4 py-2.5">
-                    <Select
-                      className="h-8 w-36 text-xs"
-                      value={u.role}
-                      onChange={(e) => patch.mutate({ id: u.id, body: { role: e.target.value } })}
-                    >
-                      <option value="member">Miembro</option>
-                      <option value="admin">Administrador</option>
-                    </Select>
+                    <Badge tone={u.role === "admin" ? "brand" : "neutral"}>
+                      {u.role === "admin" ? "Administrador" : "Miembro"}
+                    </Badge>
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="flex flex-wrap gap-1">
                       {u.areas.length === 0 ? (
                         <span className="text-xs text-slate-400">—</span>
                       ) : (
@@ -151,16 +176,6 @@ function UsersTab() {
                           </span>
                         ))
                       )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditing(u);
-                          setEditAreas(u.areas.map((a) => a.area_id));
-                        }}
-                        className="rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-500 transition hover:border-brand-400 hover:text-brand-600"
-                      >
-                        editar
-                      </button>
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
@@ -169,12 +184,15 @@ function UsersTab() {
                     </Badge>
                   </td>
                   <td className="px-4 py-2.5">
+                    <Badge tone={u.is_active ? "success" : "neutral"}>{u.is_active ? "Activo" : "Inactivo"}</Badge>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
                     <button
                       type="button"
-                      onClick={() => patch.mutate({ id: u.id, body: { is_active: !u.is_active } })}
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${u.is_active ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                      onClick={() => openEdit(u)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                     >
-                      {u.is_active ? "Activo" : "Inactivo"}
+                      <Pencil className="h-3.5 w-3.5" /> Editar
                     </button>
                   </td>
                 </tr>
@@ -184,24 +202,57 @@ function UsersTab() {
         </div>
       </Card>
 
-      <Modal open={editing !== null} onClose={() => setEditing(null)} title={`Áreas de ${editing?.name ?? ""}`}>
+      <Modal open={editUser !== null} onClose={() => setEditUser(null)} title={`Editar ${editUser?.email ?? ""}`}>
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {allAreas.map((a) => (
+          <Input label="Nombre" value={eName} onChange={(e) => setEName(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <Select label="Rol" value={eRole} onChange={(e) => setERole(e.target.value)}>
+              <option value="member">Miembro</option>
+              <option value="admin">Administrador</option>
+            </Select>
+            <div>
+              <div className="mb-1.5 text-sm font-medium text-slate-700">Estado</div>
               <button
-                key={a.id}
                 type="button"
-                onClick={() => setEditAreas((l) => toggle(l, a.id))}
-                className={`rounded-full px-3 py-1 text-sm font-medium transition ${editAreas.includes(a.id) ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                onClick={() => setEActive((v) => !v)}
+                className={`h-10 w-full rounded-xl border text-sm font-medium transition ${eActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
               >
-                {a.name}
+                {eActive ? "Activo" : "Inactivo"}
               </button>
-            ))}
+            </div>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditing(null)}>Cancelar</Button>
-            <Button onClick={() => saveAreas.mutate()} disabled={saveAreas.isPending}>
-              {saveAreas.isPending ? "Guardando…" : "Guardar áreas"}
+          <div>
+            <div className="mb-1.5 text-sm font-medium text-slate-700">Áreas</div>
+            <div className="flex flex-wrap gap-2">
+              {allAreas.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setEAreas((l) => toggle(l, a.id))}
+                  className={`rounded-full px-3 py-1 text-sm font-medium transition ${eAreas.includes(a.id) ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                >
+                  {a.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {editUser?.twofa_enabled && (
+            <div className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-sm">
+              <span className="text-amber-700">2FA activo en esta cuenta.</span>
+              <button
+                type="button"
+                onClick={() => reset2fa.mutate()}
+                disabled={reset2fa.isPending}
+                className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
+              >
+                {reset2fa.isPending ? "Restableciendo…" : "Restablecer 2FA"}
+              </button>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <Button variant="secondary" onClick={() => setEditUser(null)}>Cancelar</Button>
+            <Button onClick={() => saveUser.mutate()} disabled={!eName.trim() || saveUser.isPending}>
+              {saveUser.isPending ? "Guardando…" : "Guardar cambios"}
             </Button>
           </div>
         </div>
@@ -218,6 +269,18 @@ function AreasTab() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
+  const [edit, setEdit] = useState<AdminArea | null>(null);
+  const [eName, setEName] = useState("");
+  const [eDesc, setEDesc] = useState("");
+  const [eActive, setEActive] = useState(true);
+
+  const openEdit = (a: AdminArea) => {
+    setEdit(a);
+    setEName(a.name);
+    setEDesc(a.description ?? "");
+    setEActive(a.is_active);
+  };
+
   const create = useMutation({
     mutationFn: () => createAdminArea({ name: name.trim(), description: description.trim() || null }),
     onSuccess: () => {
@@ -227,9 +290,13 @@ function AreasTab() {
       setDescription("");
     },
   });
-  const patch = useMutation({
-    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) => updateAdminArea(id, { is_active }),
-    onSuccess: invalidate,
+  const save = useMutation({
+    mutationFn: () =>
+      updateAdminArea(edit!.id, { name: eName.trim(), description: eDesc.trim() || null, is_active: eActive }),
+    onSuccess: () => {
+      invalidate();
+      setEdit(null);
+    },
   });
 
   if (areas.isLoading) return <Spinner label="Cargando áreas…" />;
@@ -266,21 +333,47 @@ function AreasTab() {
       )}
       <Card className="divide-y divide-slate-100 overflow-hidden">
         {(areas.data ?? []).map((a) => (
-          <div key={a.id} className="flex items-center justify-between px-4 py-3">
-            <div>
+          <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
               <div className="font-medium text-slate-900">{a.name}</div>
-              <div className="text-xs text-slate-400">/{a.slug}{a.description ? ` · ${a.description}` : ""}</div>
+              <div className="truncate text-xs text-slate-400">/{a.slug}{a.description ? ` · ${a.description}` : ""}</div>
             </div>
-            <button
-              type="button"
-              onClick={() => patch.mutate({ id: a.id, is_active: !a.is_active })}
-              className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${a.is_active ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-            >
-              {a.is_active ? "Activa" : "Inactiva"}
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge tone={a.is_active ? "success" : "neutral"}>{a.is_active ? "Activa" : "Inactiva"}</Badge>
+              <button
+                type="button"
+                onClick={() => openEdit(a)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar
+              </button>
+            </div>
           </div>
         ))}
       </Card>
+
+      <Modal open={edit !== null} onClose={() => setEdit(null)} title={`Editar área`}>
+        <div className="space-y-4">
+          <Input label="Nombre" value={eName} onChange={(e) => setEName(e.target.value)} />
+          <Textarea label="Descripción" rows={2} value={eDesc} onChange={(e) => setEDesc(e.target.value)} />
+          <div>
+            <div className="mb-1.5 text-sm font-medium text-slate-700">Estado</div>
+            <button
+              type="button"
+              onClick={() => setEActive((v) => !v)}
+              className={`h-10 rounded-xl border px-4 text-sm font-medium transition ${eActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
+            >
+              {eActive ? "Activa" : "Inactiva"}
+            </button>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <Button variant="secondary" onClick={() => setEdit(null)}>Cancelar</Button>
+            <Button onClick={() => save.mutate()} disabled={!eName.trim() || save.isPending}>
+              {save.isPending ? "Guardando…" : "Guardar"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -302,7 +395,7 @@ export default function AdminPage() {
       <PageHeader
         eyebrow="Administración"
         title="Configuración del sistema"
-        description="Gestiona usuarios, roles, accesos por área y la estructura de áreas."
+        description="Gestiona usuarios, roles, accesos por área, 2FA y la estructura de áreas."
       />
       <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 text-sm font-medium shadow-card">
         <button

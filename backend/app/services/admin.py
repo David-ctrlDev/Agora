@@ -94,6 +94,15 @@ async def update_user(db: AsyncSession, user: User, payload: AdminUserUpdate) ->
     return await _read_one(db, user)
 
 
+async def reset_2fa(db: AsyncSession, user: User) -> AdminUserRead:
+    """Desactiva y borra el 2FA de un usuario (p. ej. perdió su dispositivo)."""
+    user.totp_enabled = False
+    user.totp_secret = None
+    await db.commit()
+    await db.refresh(user)
+    return await _read_one(db, user)
+
+
 async def set_user_areas(
     db: AsyncSession, user: User, areas: list[AreaAssignment]
 ) -> AdminUserRead:

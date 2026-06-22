@@ -40,6 +40,8 @@ export const setUserAreas = (
   id: number,
   areas: { area_id: number; area_role: string }[],
 ) => api.put<AdminUser>(`/api/admin/users/${id}/areas`, { areas });
+export const resetUser2fa = (id: number) =>
+  api.post<AdminUser>(`/api/admin/users/${id}/reset-2fa`, {});
 
 export const listAdminAreas = () => api.get<AdminArea[]>("/api/admin/areas");
 export const createAdminArea = (payload: { name: string; description?: string | null }) =>

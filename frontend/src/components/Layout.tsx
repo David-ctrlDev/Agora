@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { unreadCount } from "../api/notifications";
 import { useLogout, useMe } from "../auth/useAuth";
@@ -26,6 +26,7 @@ const navItems = [
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
   { to: "/agente", label: "Agente", icon: Sparkles },
   { to: "/notificaciones", label: "Notificaciones", icon: Bell },
+  { to: "/seguridad", label: "Seguridad", icon: ShieldCheck },
 ];
 
 function getInitials(name: string): string {
@@ -141,13 +142,6 @@ export default function Layout() {
                   {me.data.role === "admin" ? "Administrador" : "Miembro"}
                 </div>
               </div>
-              <Link
-                to="/seguridad"
-                title="Seguridad"
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-              >
-                <ShieldCheck className="h-4 w-4" />
-              </Link>
               <button
                 type="button"
                 onClick={handleLogout}
