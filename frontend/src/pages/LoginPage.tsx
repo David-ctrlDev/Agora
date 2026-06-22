@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronDown, FolderKanban, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, BarChart3, ChevronDown, FolderKanban, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { type DevUser, devLogin, googleLoginUrl, listDevUsers } from "../api/auth";
+import { type DevUser, devLogin, googleLoginUrl, listDevUsers, verify2fa } from "../api/auth";
 import { useMe } from "../auth/useAuth";
 import { Badge, Spinner } from "../components/ui";
 
@@ -37,6 +37,7 @@ const FEATURES = [
 const ERROR_MESSAGES: Record<string, string> = {
   domain: "Esa cuenta no pertenece al dominio de Invesa. Usa tu correo @invesa.com.",
   google: "No pudimos completar el inicio de sesión con Google. Inténtalo de nuevo.",
+  not_registered: "Tu cuenta aún no está habilitada en Ágora. Pide a un administrador que te dé acceso.",
 };
 
 export default function LoginPage() {
@@ -46,20 +47,36 @@ export default function LoginPage() {
   const devUsers = useQuery({ queryKey: ["dev-users"], queryFn: listDevUsers, retry: false });
   const [showDev, setShowDev] = useState(false);
 
-  const errorKey = new URLSearchParams(window.location.search).get("error") ?? "";
+  const params = new URLSearchParams(window.location.search);
+  const errorKey = params.get("error") ?? "";
   const error = ERROR_MESSAGES[errorKey];
+  const [stage, setStage] = useState<"signin" | "2fa">(params.get("2fa") === "1" ? "2fa" : "signin");
+  const [code, setCode] = useState("");
+
+  const onAuthed = (user: NonNullable<ReturnType<typeof useMe>["data"]>) => {
+    queryClient.setQueryData(["me"], user);
+    navigate("/inicio", { replace: true });
+  };
 
   const login = useMutation({
     mutationFn: (userId: number) => devLogin(userId),
-    onSuccess: (user) => {
-      queryClient.setQueryData(["me"], user);
-      navigate("/inicio", { replace: true });
+    onSuccess: (res) => {
+      if (res.needs_2fa) {
+        setStage("2fa");
+        return;
+      }
+      if (res.user) onAuthed(res.user);
     },
   });
 
+  const verify = useMutation({
+    mutationFn: () => verify2fa(code.trim()),
+    onSuccess: (user) => onAuthed(user),
+  });
+
   useEffect(() => {
-    if (me.data) navigate("/inicio", { replace: true });
-  }, [me.data, navigate]);
+    if (me.data && stage === "signin") navigate("/inicio", { replace: true });
+  }, [me.data, stage, navigate]);
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -116,75 +133,124 @@ export default function LoginPage() {
             <span className="text-lg font-semibold tracking-tight text-slate-900">Ágora</span>
           </div>
 
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Bienvenido</h1>
-          <p className="mt-1.5 text-sm text-slate-500">Inicia sesión para acceder a tu cartera de proyectos.</p>
+          {stage === "2fa" ? (
+            <>
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Verificación en dos pasos</h1>
+              <p className="mt-1.5 text-sm text-slate-500">
+                Ingresa el código de 6 dígitos de tu app de autenticación.
+              </p>
 
-          {error && (
-            <div className="mt-5 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+              {verify.isError && (
+                <div className="mt-5 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+                  Código inválido o expirado. Inténtalo de nuevo.
+                </div>
+              )}
 
-          <a
-            href={googleLoginUrl}
-            className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-          >
-            <GoogleIcon />
-            Continuar con Google
-          </a>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && code.trim().length === 6) verify.mutate();
+                }}
+                inputMode="numeric"
+                autoFocus
+                placeholder="000000"
+                className="mt-6 h-14 w-full rounded-xl border border-slate-300 bg-white text-center text-2xl font-semibold tracking-[0.4em] text-slate-900 placeholder:text-slate-300 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              />
 
-          <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-400">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Acceso restringido a cuentas <span className="font-medium text-slate-500">@invesa.com</span>
-          </div>
-
-          {/* Modo desarrollo (solo local) */}
-          {devUsers.data && devUsers.data.length > 0 && (
-            <div className="mt-8 border-t border-slate-100 pt-5">
               <button
                 type="button"
-                onClick={() => setShowDev((v) => !v)}
-                className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-400 transition hover:text-slate-600"
+                onClick={() => verify.mutate()}
+                disabled={code.trim().length !== 6 || verify.isPending}
+                className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-brand-600 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50"
               >
-                Modo desarrollo (local)
-                <ChevronDown className={`h-4 w-4 transition ${showDev ? "rotate-180" : ""}`} />
+                {verify.isPending ? "Verificando…" : "Verificar e ingresar"}
               </button>
-              {showDev && (
-                <div className="mt-3 space-y-2">
-                  {devUsers.data.map((user: DevUser) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => login.mutate(user.id)}
-                      disabled={login.isPending}
-                      className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/40 disabled:opacity-50"
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                        {getInitials(user.name)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-slate-900">{user.name}</span>
-                          <Badge tone={user.role === "admin" ? "brand" : "neutral"}>
-                            {user.role === "admin" ? "Admin" : "Miembro"}
-                          </Badge>
-                        </div>
-                        <div className="truncate text-xs text-slate-500">{user.email}</div>
-                      </div>
-                    </button>
-                  ))}
-                  {login.isError && (
-                    <p className="text-sm text-red-600">{(login.error as Error).message}</p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStage("signin");
+                  setCode("");
+                  window.history.replaceState(null, "", "/login");
+                }}
+                className="mt-4 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-700"
+              >
+                <ArrowLeft className="h-4 w-4" /> Volver
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Bienvenido</h1>
+              <p className="mt-1.5 text-sm text-slate-500">Inicia sesión para acceder a tu cartera de proyectos.</p>
+
+              {error && (
+                <div className="mt-5 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <a
+                href={googleLoginUrl}
+                className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <GoogleIcon />
+                Continuar con Google
+              </a>
+
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-400">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Acceso restringido a cuentas <span className="font-medium text-slate-500">@invesa.com</span>
+              </div>
+
+              {devUsers.data && devUsers.data.length > 0 && (
+                <div className="mt-8 border-t border-slate-100 pt-5">
+                  <button
+                    type="button"
+                    onClick={() => setShowDev((v) => !v)}
+                    className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-400 transition hover:text-slate-600"
+                  >
+                    Modo desarrollo (local)
+                    <ChevronDown className={`h-4 w-4 transition ${showDev ? "rotate-180" : ""}`} />
+                  </button>
+                  {showDev && (
+                    <div className="mt-3 space-y-2">
+                      {devUsers.data.map((user: DevUser) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => login.mutate(user.id)}
+                          disabled={login.isPending}
+                          className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/40 disabled:opacity-50"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                            {getInitials(user.name)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium text-slate-900">{user.name}</span>
+                              <Badge tone={user.role === "admin" ? "brand" : "neutral"}>
+                                {user.role === "admin" ? "Admin" : "Miembro"}
+                              </Badge>
+                            </div>
+                            <div className="truncate text-xs text-slate-500">{user.email}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-          )}
 
-          {devUsers.isLoading && (
-            <div className="mt-6">
-              <Spinner label="Cargando…" />
-            </div>
+              {devUsers.isLoading && (
+                <div className="mt-6">
+                  <Spinner label="Cargando…" />
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
