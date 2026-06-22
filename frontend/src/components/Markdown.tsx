@@ -25,13 +25,13 @@ export default function Markdown({ children }: { children: string }) {
           <code className="rounded bg-slate-200/70 px-1 py-0.5 text-[0.8em]" {...props} />
         ),
         h1: ({ node, ...props }) => (
-          <h3 className="mb-1 mt-2 text-sm font-semibold text-slate-900" {...props} />
+          <h3 className="mb-1.5 mt-3 text-base font-semibold text-slate-900 first:mt-0" {...props} />
         ),
         h2: ({ node, ...props }) => (
-          <h3 className="mb-1 mt-2 text-sm font-semibold text-slate-900" {...props} />
+          <h3 className="mb-1.5 mt-3 text-base font-semibold text-slate-900 first:mt-0" {...props} />
         ),
         h3: ({ node, ...props }) => (
-          <h3 className="mb-1 mt-2 text-sm font-semibold text-slate-900" {...props} />
+          <h3 className="mb-1 mt-2.5 text-[15px] font-semibold text-slate-900 first:mt-0" {...props} />
         ),
       }}
     >

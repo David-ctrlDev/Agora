@@ -1,18 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlarmClock,
+  ArrowUp,
+  ArrowUpRight,
+  BarChart3,
+  CalendarPlus,
   Check,
   ChevronDown,
   FileText,
   FolderOpen,
+  ListTodo,
   MessagesSquare,
+  PackageCheck,
   Paperclip,
   Plus,
-  Send,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
-import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type ComponentType, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import {
   type AgentMessage,
@@ -29,38 +34,44 @@ import {
   uploadAttachment,
 } from "../api/agent";
 import { googleStatus } from "../api/google";
+import { useMe } from "../auth/useAuth";
 import { useAgentStore } from "../store/agentStore";
+import AgoraMark from "./AgoraMark";
 import DriveBrowser from "./DriveBrowser";
 import Markdown from "./Markdown";
 import { Spinner } from "./ui";
 
 const UPLOAD_ACCEPT = ".pdf,.doc,.docx,.txt,.md,.csv,.vtt,.srt,.log";
 
-const SUGGESTIONS = [
-  "¿Cómo van mis proyectos?",
-  "¿Qué tareas tengo pendientes?",
-  "¿Qué tareas están vencidas?",
-  "Agenda una reunión con ana@invesa.com mañana",
+const SUGGESTIONS: { icon: ComponentType<{ className?: string }>; text: string }[] = [
+  { icon: BarChart3, text: "¿Cómo van mis proyectos?" },
+  { icon: ListTodo, text: "¿Qué tareas tengo pendientes?" },
+  { icon: AlarmClock, text: "¿Qué se vence esta semana?" },
+  { icon: PackageCheck, text: "¿Qué proyectos entregamos pronto?" },
+  { icon: CalendarPlus, text: "Agenda una reunión mañana a las 10" },
 ];
 
-function AssistantAvatar() {
+/** Etiqueta editorial que precede cada turno del asistente (sustituye al avatar). */
+function AssistantLabel() {
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
-      <Sparkles className="h-4 w-4" />
+    <div className="mb-1.5 flex items-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700/70">
+        Ágora
+      </span>
+      <span className="h-px flex-1 bg-gradient-to-r from-brand-200/70 to-transparent" />
     </div>
   );
 }
 
-function TypingDots() {
+function Thinking() {
   return (
-    <div className="flex items-center gap-1 px-4 py-3">
-      {[0, 150, 300].map((delay) => (
-        <span
-          key={delay}
-          className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
-          style={{ animationDelay: `${delay}ms` }}
-        />
-      ))}
+    <div className="animate-fade-in">
+      <AssistantLabel />
+      <div className="border-l-2 border-brand-400/40 pl-3.5">
+        <span className="animate-shimmer bg-[linear-gradient(90deg,#cbd5e1_0%,#94a3b8_30%,#059669_50%,#94a3b8_70%,#cbd5e1_100%)] bg-[length:200%_100%] bg-clip-text text-sm font-medium text-transparent">
+          Pensando…
+        </span>
+      </div>
     </div>
   );
 }
@@ -78,8 +89,8 @@ function MessageRow({
 }) {
   if (message.role === "user") {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm">
+      <div className="flex animate-fade-in justify-end">
+        <div className="max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-slate-900 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
           {message.content}
         </div>
       </div>
@@ -88,34 +99,36 @@ function MessageRow({
 
   const status = message.action?.status;
   return (
-    <div className="flex gap-2.5">
-      <AssistantAvatar />
-      <div className="max-w-[85%] space-y-2">
-        <div className="rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm">
-          <Markdown>{message.content}</Markdown>
-        </div>
+    <div className="animate-fade-in">
+      <AssistantLabel />
+      <div className="border-l-2 border-brand-400/40 pl-3.5 text-[15px] leading-relaxed text-slate-700">
+        <Markdown>{message.content}</Markdown>
         {status === "pending" && (
-          <div className="flex gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={onConfirm}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-50"
             >
-              <Check className="h-3.5 w-3.5" /> Confirmar
+              <Check className="h-3.5 w-3.5" /> Confirmar y ejecutar
             </button>
             <button
               type="button"
               onClick={onCancel}
               disabled={busy}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-xl px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100 disabled:opacity-50"
             >
-              Cancelar
+              Descartar
             </button>
           </div>
         )}
-        {status === "executed" && <p className="px-1 text-xs text-emerald-600">✓ Acción ejecutada</p>}
-        {status === "cancelled" && <p className="px-1 text-xs text-slate-400">Acción cancelada</p>}
+        {status === "executed" && (
+          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
+            <Check className="h-3.5 w-3.5" /> Acción ejecutada
+          </div>
+        )}
+        {status === "cancelled" && <p className="mt-2 text-xs text-slate-400">Acción descartada</p>}
       </div>
     </div>
   );
@@ -123,6 +136,8 @@ function MessageRow({
 
 export default function AgentChat({ className = "" }: { className?: string }) {
   const queryClient = useQueryClient();
+  const me = useMe();
+  const firstName = me.data?.name?.split(" ")[0];
   const conversationId = useAgentStore((s) => s.activeConversationId);
   const setConversationId = useAgentStore((s) => s.setActiveConversationId);
   const [input, setInput] = useState("");
@@ -133,13 +148,23 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const driveBtnRef = useRef<HTMLButtonElement>(null);
+  const didInit = useRef(false);
 
   const conversationsQuery = useQuery({ queryKey: ["agent-convs"], queryFn: listConversations });
   const googleQuery = useQuery({ queryKey: ["google-status"], queryFn: googleStatus });
   const driveConnected = googleQuery.data?.connected ?? false;
 
+  // Al abrir por primera vez, retomamos la conversación más reciente. Pero solo
+  // una vez: si el usuario pulsa «Nuevo» (id = null) dejamos ver el inicio en
+  // blanco en vez de volver a saltar a la última conversación.
   useEffect(() => {
-    if (conversationId === null && conversationsQuery.data && conversationsQuery.data.length > 0) {
+    if (
+      !didInit.current &&
+      conversationId === null &&
+      conversationsQuery.data &&
+      conversationsQuery.data.length > 0
+    ) {
+      didInit.current = true;
       setConversationId(conversationsQuery.data[0].id);
     }
   }, [conversationId, conversationsQuery.data, setConversationId]);
@@ -155,6 +180,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const ensureConversation = async (): Promise<number> => {
     if (conversationId !== null) return conversationId;
     const conversation = await createConversation();
+    didInit.current = true;
     setConversationId(conversation.id);
     void queryClient.invalidateQueries({ queryKey: ["agent-convs"] });
     return conversation.id;
@@ -232,6 +258,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
     },
   });
   const newChat = () => {
+    didInit.current = true; // evita que el efecto vuelva a saltar a la última conversación
     setConversationId(null);
     setHistoryOpen(false);
     setInput("");
@@ -245,7 +272,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+    ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
   }, [input]);
 
   const doSend = () => {
@@ -268,10 +295,12 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const messages = messagesQuery.data ?? [];
   const loadingHistory = conversationId !== null && messagesQuery.isLoading;
   const showEmpty = !loadingHistory && messages.length === 0 && !send.isPending;
+  const canSend = (input.trim().length > 0 || attachments.length > 0) && !send.isPending && !attaching;
 
   return (
-    <div className={`flex min-h-0 flex-col ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2">
+    <div className={`flex min-h-0 flex-col bg-white ${className}`}>
+      {/* Barra de conversación */}
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2">
         <div className="relative min-w-0">
           <button
             type="button"
@@ -285,14 +314,14 @@ export default function AgentChat({ className = "" }: { className?: string }) {
           {historyOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setHistoryOpen(false)} />
-              <div className="absolute left-0 top-full z-20 mt-1 max-h-72 w-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+              <div className="absolute left-0 top-full z-20 mt-1 max-h-72 w-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-pop">
                 {conversations.length === 0 ? (
                   <p className="px-3 py-2 text-sm text-slate-400">Aún no hay conversaciones.</p>
                 ) : (
                   conversations.map((c) => (
                     <div
                       key={c.id}
-                      className={`group flex items-center gap-1 rounded-lg ${
+                      className={`group flex items-center gap-1 rounded-xl ${
                         c.id === conversationId ? "bg-brand-50" : "hover:bg-slate-50"
                       }`}
                     >
@@ -302,7 +331,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
                           setConversationId(c.id);
                           setHistoryOpen(false);
                         }}
-                        className="min-w-0 flex-1 px-2 py-1.5 text-left"
+                        className="min-w-0 flex-1 px-2.5 py-1.5 text-left"
                       >
                         <div className="truncate text-sm text-slate-700">{c.title}</div>
                         <div className="text-xs text-slate-400">
@@ -316,7 +345,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
                         type="button"
                         onClick={() => del.mutate(c.id)}
                         title="Eliminar conversación"
-                        className="mr-1 rounded p-1 text-slate-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                        className="mr-1 rounded-lg p-1 text-slate-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -330,38 +359,48 @@ export default function AgentChat({ className = "" }: { className?: string }) {
         <button
           type="button"
           onClick={newChat}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
         >
           <Plus className="h-4 w-4" /> Nuevo
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">
+
+      {/* Transcripción */}
+      <div className="flex-1 overflow-y-auto px-4 py-5">
         {loadingHistory ? (
           <Spinner label="Cargando…" />
         ) : showEmpty ? (
-          <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-800">¿En qué te ayudo hoy?</h3>
-            <p className="mt-1 max-w-xs text-sm text-slate-500">
-              Pregúntame por tus proyectos y tareas, o pídeme una acción.
+          <div className="relative flex h-full flex-col items-center justify-center px-2 text-center">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-1/2 top-1/4 h-44 w-44 -translate-x-1/2 rounded-full bg-brand-400/20 blur-3xl"
+            />
+            <AgoraMark className="relative h-14 w-14 shadow-[0_10px_30px_-8px_rgba(5,150,105,0.6)]" />
+            <h3 className="relative mt-4 text-lg font-semibold tracking-tight text-slate-900">
+              {firstName ? `Hola, ${firstName}` : "Hola"}
+            </h3>
+            <p className="relative mt-1 max-w-xs text-sm text-slate-500">
+              Soy Ágora. Pregúntame por proyectos, tareas, riesgos o entregas — o pídeme una acción.
             </p>
-            <div className="mt-5 grid w-full max-w-sm gap-2">
-              {SUGGESTIONS.map((s) => (
+            <div className="relative mt-6 grid w-full max-w-md gap-2">
+              {SUGGESTIONS.map(({ icon: Icon, text }) => (
                 <button
-                  key={s}
+                  key={text}
                   type="button"
-                  onClick={() => submit(s)}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-left text-sm text-slate-600 transition hover:border-brand-300 hover:bg-brand-50"
+                  onClick={() => submit(text)}
+                  className="group flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-left transition hover:border-brand-300 hover:bg-brand-50/50 hover:shadow-soft"
                 >
-                  {s}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-brand-100 group-hover:text-brand-700">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm text-slate-700">{text}</span>
+                  <ArrowUpRight className="ml-auto h-4 w-4 text-slate-300 transition group-hover:text-brand-500" />
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="mx-auto w-full max-w-3xl space-y-5">
             {messages.map((m) => (
               <MessageRow
                 key={m.id}
@@ -372,9 +411,9 @@ export default function AgentChat({ className = "" }: { className?: string }) {
               />
             ))}
             {pending && (
-              <div className="flex justify-end">
-                <div className="max-w-[85%] space-y-1">
-                  <div className="whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-brand-600 px-4 py-2.5 text-sm text-white shadow-sm">
+              <div className="flex animate-fade-in justify-end">
+                <div className="max-w-[82%] space-y-1">
+                  <div className="whitespace-pre-wrap rounded-[20px] rounded-br-md bg-slate-900 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
                     {pending.text}
                   </div>
                   {pending.files.length > 0 && (
@@ -382,7 +421,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
                       {pending.files.map((f) => (
                         <span
                           key={f}
-                          className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-1.5 py-0.5 text-[11px] text-brand-700"
+                          className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500"
                         >
                           <FileText className="h-3 w-3" /> {f}
                         </span>
@@ -392,97 +431,101 @@ export default function AgentChat({ className = "" }: { className?: string }) {
                 </div>
               </div>
             )}
-            {send.isPending && (
-              <div className="flex gap-2.5">
-                <AssistantAvatar />
-                <div className="rounded-2xl rounded-tl-sm border border-slate-200 bg-white shadow-sm">
-                  <TypingDots />
-                </div>
-              </div>
-            )}
+            {send.isPending && <Thinking />}
             <div ref={endRef} />
           </div>
         )}
       </div>
 
-      <div className="border-t border-slate-200 p-3">
-        {(attachments.length > 0 || attaching) && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {attachments.map((a) => (
-              <span
-                key={a.id}
-                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                title={`${a.name} · ${a.char_count.toLocaleString("es-CO")} caracteres`}
+      {/* Composer */}
+      <div className="border-t border-slate-200/80 bg-slate-50/60 px-4 py-3">
+        <div className="mx-auto w-full max-w-3xl">
+          {(attachments.length > 0 || attaching) && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {attachments.map((a) => (
+                <span
+                  key={a.id}
+                  className="inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 shadow-soft"
+                  title={`${a.name} · ${a.char_count.toLocaleString("es-CO")} caracteres`}
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-brand-600" />
+                  <span className="truncate">{a.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment.mutate(a.id)}
+                    className="shrink-0 text-slate-400 transition hover:text-red-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              {attaching && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-400">
+                  Adjuntando…
+                </span>
+              )}
+            </div>
+          )}
+          {attachError && <p className="mb-2 px-1 text-xs text-red-600">{attachError.message}</p>}
+
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-soft transition focus-within:border-brand-400 focus-within:shadow-[0_0_0_3px_rgba(16,185,129,0.12)]">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={UPLOAD_ACCEPT}
+              onChange={onFileChange}
+              className="hidden"
+            />
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Pregunta algo o pega una transcripción…"
+              className="block max-h-[140px] w-full resize-none bg-transparent px-4 pb-1 pt-3 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            />
+            <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={attaching}
+                title="Adjuntar un archivo (PDF, Word, transcripción…)"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
               >
-                <FileText className="h-3.5 w-3.5 shrink-0 text-brand-600" />
-                <span className="truncate">{a.name}</span>
+                <Paperclip className="h-[18px] w-[18px]" />
+              </button>
+              <button
+                ref={driveBtnRef}
+                type="button"
+                onClick={() => driveConnected && setShowDrive(true)}
+                disabled={attaching || !driveConnected}
+                title={driveConnected ? "Adjuntar desde Google Drive" : "Conecta tu Google para usar Drive"}
+                className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
+              >
+                <FolderOpen className="h-[18px] w-[18px]" />
+                <span className="text-xs font-medium">Drive</span>
+              </button>
+              <div className="ml-auto flex items-center gap-2.5">
+                <span className="hidden text-[11px] text-slate-400 sm:inline">↵ enviar</span>
                 <button
                   type="button"
-                  onClick={() => removeAttachment.mutate(a.id)}
-                  className="shrink-0 text-slate-400 transition hover:text-red-600"
+                  onClick={doSend}
+                  disabled={!canSend}
+                  title="Enviar"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm transition hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                 >
-                  <X className="h-3 w-3" />
+                  <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} />
                 </button>
-              </span>
-            ))}
-            {attaching && (
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-400">
-                Adjuntando…
-              </span>
-            )}
+              </div>
+            </div>
           </div>
-        )}
-        {attachError && <p className="mb-2 px-1 text-xs text-red-600">{attachError.message}</p>}
-        <div className="flex items-end gap-1 rounded-2xl border border-slate-300 bg-white px-2 py-2 transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={UPLOAD_ACCEPT}
-            onChange={onFileChange}
-            className="hidden"
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={attaching}
-            title="Adjuntar un archivo (PDF, Word, transcripción…)"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-          <button
-            ref={driveBtnRef}
-            type="button"
-            onClick={() => driveConnected && setShowDrive(true)}
-            disabled={attaching || !driveConnected}
-            title={driveConnected ? "Adjuntar desde Google Drive" : "Conecta tu Google para usar Drive"}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
-          >
-            <FolderOpen className="h-4 w-4" />
-          </button>
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Escribe tu mensaje…"
-            className="max-h-[120px] flex-1 resize-none bg-transparent px-1 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={doSend}
-            disabled={(!input.trim() && attachments.length === 0) || send.isPending || attaching}
-            title="Enviar"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          <p className="mt-1.5 text-center text-[11px] text-slate-400">
+            Las acciones (reuniones, correos, cambios) siempre piden tu confirmación.
+          </p>
         </div>
-        <p className="mt-1.5 px-1 text-[11px] text-slate-400">
-          Adjunta un archivo o uno de Drive y pídeme, p. ej., un cronograma de tareas.
-        </p>
       </div>
+
       {showDrive && (
         <DriveBrowser
           title="Adjuntar desde Drive"
