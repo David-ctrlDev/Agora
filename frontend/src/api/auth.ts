@@ -24,6 +24,8 @@ export interface DevUser {
   areas: string[];
 }
 
+export const googleLoginUrl = "/api/auth/login/google";
+
 export const getMe = () => api.get<CurrentUser>("/api/auth/me");
 export const listDevUsers = () => api.get<DevUser[]>("/api/auth/dev-users");
 export const devLogin = (userId: number) =>
