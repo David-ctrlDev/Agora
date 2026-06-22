@@ -68,7 +68,10 @@ export default function HomePage() {
   const myTasks = useQuery({ queryKey: ["my-tasks"], queryFn: listMyTasks });
   const notifications = useQuery({ queryKey: ["notifications"], queryFn: listNotifications });
 
-  const projects = projectsQuery.data ?? [];
+  const allProjects = projectsQuery.data ?? [];
+  const isAdmin = me.data?.role === "admin";
+  // Admin: toda la cartera. Miembro: solo los proyectos que lidera.
+  const projects = isAdmin ? allProjects : allProjects.filter((p) => p.owner_id === me.data?.id);
   const tasks = myTasks.data ?? [];
   const alerts = (notifications.data ?? []).filter((n) => n.status === "unread");
   const firstName = (me.data?.name ?? "").split(" ")[0];
@@ -131,11 +134,13 @@ export default function HomePage() {
       <PageHeader
         eyebrow={new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" })}
         title={firstName ? `Hola, ${firstName}` : "Inicio"}
-        description="Resumen de tu cartera de proyectos."
+        description={
+          isAdmin ? "Resumen de toda la cartera de proyectos." : "Resumen de los proyectos que lideras."
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Proyectos" value={projects.length} hint={`${active} en curso`} icon={<FolderKanban className="h-4 w-4" />} tone="brand" />
+        <Kpi label={isAdmin ? "Proyectos" : "Mis proyectos"} value={projects.length} hint={`${active} en curso`} icon={<FolderKanban className="h-4 w-4" />} tone="brand" />
         <Kpi label="Avance promedio" value={`${avgProgress}%`} hint="de la cartera" icon={<TrendingUp className="h-4 w-4" />} tone="emerald" />
         <Kpi label="En curso" value={active} hint="proyectos activos" icon={<Activity className="h-4 w-4" />} tone="brand" />
         <Kpi label="Completados" value={doneCount} hint="proyectos terminados" icon={<CheckCircle2 className="h-4 w-4" />} tone="emerald" />

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, List, Plus, Search } from "lucide-react";
+import { LayoutGrid, List, Plus, Search, X } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -51,6 +51,8 @@ export default function ProjectsPage() {
   const [areaFilter, setAreaFilter] = useState<number | "">("");
   const [statusFilter, setStatusFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [view, setView] = useState<"cards" | "list">(
     () => (localStorage.getItem(VIEW_KEY) as "cards" | "list") || "cards",
   );
@@ -103,9 +105,11 @@ export default function ProjectsPage() {
           (p.description ?? "").toLowerCase().includes(q)) &&
         (areaFilter === "" || p.area_id === areaFilter) &&
         (!statusFilter || p.status === statusFilter) &&
-        (!ownerFilter || p.owner_name === ownerFilter),
+        (!ownerFilter || p.owner_name === ownerFilter) &&
+        (!dateFrom || (p.due_date != null && p.due_date >= dateFrom)) &&
+        (!dateTo || (p.due_date != null && p.due_date <= dateTo)),
     );
-  }, [projects, search, areaFilter, statusFilter, ownerFilter]);
+  }, [projects, search, areaFilter, statusFilter, ownerFilter, dateFrom, dateTo]);
 
   return (
     <div className="space-y-6">
@@ -175,8 +179,8 @@ export default function ProjectsPage() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -214,6 +218,37 @@ export default function ProjectsPage() {
               </option>
             ))}
           </Select>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <span className="hidden sm:inline">Entrega</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            title="Entrega desde"
+            className="h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-sm text-slate-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          />
+          <span>–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            title="Entrega hasta"
+            className="h-10 rounded-xl border border-slate-300 bg-white px-2.5 text-sm text-slate-600 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+              }}
+              title="Limpiar fechas"
+              className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <div className="flex h-10 shrink-0 overflow-hidden rounded-lg border border-slate-300">
           <button
