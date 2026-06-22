@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { type DriveEntry, browseDrive } from "../api/google";
 import { Spinner } from "./ui";
@@ -136,7 +137,7 @@ export default function DriveBrowser({
 
   const selectedList = Object.values(selected);
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
@@ -280,6 +281,7 @@ export default function DriveBrowser({
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

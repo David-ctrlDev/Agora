@@ -251,6 +251,58 @@ class DevAgentLLM:
         lines.append("Pulsa «Confirmar» para crearla.")
         return "\n".join(lines)
 
+    def _task_line(self, t: Any) -> str:
+        if not isinstance(t, dict):
+            return str(t)
+        bits = []
+        if t.get("priority"):
+            bits.append(t["priority"])
+        if t.get("assignee"):
+            bits.append(f"→ {t['assignee']}")
+        if t.get("due_date"):
+            bits.append(t["due_date"])
+        return t.get("title", "") + (f" ({', '.join(bits)})" if bits else "")
+
+    def _task_list_block(self, tasks: list[Any], limit: int = 25) -> str:
+        body = "\n".join(f"{i}. {self._task_line(t)}" for i, t in enumerate(tasks[:limit], 1))
+        if len(tasks) > limit:
+            body += f"\n…y {len(tasks) - limit} más."
+        return body
+
+    def compose_create_project_with_tasks_proposal(self, args: dict[str, Any]) -> str:
+        area = args.get("area_name") or "(área no indicada)"
+        tasks = args.get("tasks") or []
+        return (
+            "Voy a crear este proyecto y su listado de tareas (requiere tu confirmación):\n\n"
+            f"**Proyecto:** {args.get('name', '')} · **Área:** {area}\n\n"
+            f"**Tareas ({len(tasks)}):**\n"
+            f"{self._task_list_block(tasks)}\n\n"
+            "Pulsa «Confirmar» para crear el proyecto con todas sus tareas."
+        )
+
+    def compose_create_project_with_tasks_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear el proyecto: {result.get('error', 'error desconocido')}"
+        n = len(result.get("tasks", []))
+        return f"✅ Proyecto «{result['name']}» creado en {result['area']} con {n} tarea(s)."
+
+    def compose_create_tasks_proposal(self, args: dict[str, Any]) -> str:
+        project = args.get("project_name") or "(proyecto no indicado)"
+        tasks = args.get("tasks") or []
+        return (
+            "Voy a crear estas tareas (requiere tu confirmación):\n\n"
+            f"**Proyecto:** {project}\n\n"
+            f"**Tareas ({len(tasks)}):**\n"
+            f"{self._task_list_block(tasks)}\n\n"
+            "Pulsa «Confirmar» para crearlas."
+        )
+
+    def compose_create_tasks_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear las tareas: {result.get('error', 'error desconocido')}"
+        n = len(result.get("tasks", []))
+        return f"✅ {n} tarea(s) creada(s) en «{result['project']}»."
+
     def compose_meeting_result(self, result: dict[str, Any]) -> str:
         return f"✅ Reunión creada: «{result['title']}». Enlace de Meet: {result['meet_url']}"
 

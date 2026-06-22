@@ -320,6 +320,14 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_create_task(db, user, action.params)
         text = _llm.compose_task_result(result)
+    elif action.action_type == "create_project_with_tasks":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_project_with_tasks(db, user, action.params)
+        text = _llm.compose_create_project_with_tasks_result(result)
+    elif action.action_type == "create_tasks":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_tasks(db, user, action.params)
+        text = _llm.compose_create_tasks_result(result)
     elif action.action_type == "update_task":
         user = await db.get(User, action.user_id)
         result = await actions.execute_update_task(db, user, action.params)

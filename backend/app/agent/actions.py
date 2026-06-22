@@ -143,6 +143,102 @@ async def execute_create_task(db: AsyncSession, user: User, params: dict[str, An
     }
 
 
+def _coerce_priority(value: Any) -> str:
+    return value if value in ("low", "medium", "high") else "medium"
+
+
+def _parse_task_due(value: Any):
+    from datetime import date
+
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+async def _create_tasks_in(db: AsyncSession, user: User, project, items: list) -> list[str]:
+    """Crea una lista de tareas dentro de un proyecto ya resuelto. Devuelve los títulos creados."""
+    from app.schemas.task import TaskCreate
+    from app.services import tasks as tasks_svc
+
+    created: list[str] = []
+    for it in items or []:
+        data = it if isinstance(it, dict) else {"title": str(it)}
+        title = (data.get("title") or "").strip()
+        if not title:
+            continue
+        assignee_id = await _resolve_assignee(db, user, data.get("assignee"))
+        task = await tasks_svc.create_task(
+            db,
+            project.id,
+            TaskCreate(
+                title=title[:300],
+                priority=_coerce_priority(data.get("priority")),
+                assignee_id=assignee_id,
+                due_date=_parse_task_due(data.get("due_date")),
+            ),
+        )
+        created.append(task.title)
+    return created
+
+
+async def execute_create_project_with_tasks(
+    db: AsyncSession, user: User, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Crea un proyecto y, dentro de él, toda una lista de tareas en un solo paso."""
+    from app.models.project import Project
+
+    proj = await execute_create_project(
+        db, user, {"name": params.get("name", "Nuevo proyecto"), "area_name": params.get("area_name")}
+    )
+    if not proj.get("ok"):
+        return proj
+    project = await db.get(Project, proj["project_id"])
+    created = await _create_tasks_in(db, user, project, params.get("tasks") or [])
+    return {
+        "ok": True,
+        "name": proj["name"],
+        "area": proj["area"],
+        "project_id": proj["project_id"],
+        "tasks": created,
+    }
+
+
+async def execute_create_tasks(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Crea varias tareas (lote) en un proyecto existente, accesible y editable."""
+    from sqlalchemy import func, select
+
+    from app.models.project import Project
+    from app.services import projects as projects_svc
+
+    project_ids = await projects_svc.accessible_project_ids(db, user)
+    if not project_ids:
+        return {"ok": False, "error": "no tienes proyectos accesibles."}
+    rows = (
+        await db.execute(
+            select(Project)
+            .where(Project.id.in_(project_ids))
+            .order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    wanted = _norm(params.get("project_name") or "")
+    project = None
+    if wanted:
+        project = next((p for p in rows if wanted in _norm(p.name)), None)
+    if project is None and len(rows) == 1:
+        project = rows[0]
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
+    created = await _create_tasks_in(db, user, project, params.get("tasks") or [])
+    if not created:
+        return {"ok": False, "error": "no me diste tareas válidas para crear."}
+    return {"ok": True, "project": project.name, "tasks": created}
+
+
 async def _find_task(db: AsyncSession, user: User, title: str):
     from sqlalchemy import func, select
 

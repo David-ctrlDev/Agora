@@ -39,17 +39,35 @@ def _system(user: User) -> str:
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
         "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
         "tarea, crear reunión, enviar correo, cambiar o asignar tareas) llama a la herramienta "
-        "correspondiente: el sistema pedirá confirmación antes de ejecutarla. Responde SIEMPRE de "
+        "correspondiente: el sistema pedirá confirmación antes de ejecutarla. MUY IMPORTANTE: si el "
+        "usuario pide un proyecto Y sus tareas (un cronograma o plan, normalmente a partir de un acta "
+        "o documento adjunto), usa create_project_with_tasks con TODAS las tareas en una sola "
+        "llamada; si pide añadir varias tareas a un proyecto existente, usa create_tasks con la lista "
+        "completa. Nunca crees las tareas de una en una ni te detengas tras crear solo el proyecto. "
+        "Responde SIEMPRE de "
         "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
     )
 
 _ACTION_TOOLS = {
     "create_project",
     "create_task",
+    "create_project_with_tasks",
+    "create_tasks",
     "create_meeting",
     "send_email",
     "update_task",
     "assign_task",
+}
+
+_TASK_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+        "assignee": {"type": "string", "description": "Nombre o correo del responsable (opcional)."},
+        "due_date": {"type": "string", "description": "Fecha ISO YYYY-MM-DD si el documento la indica (opcional)."},
+    },
+    "required": ["title"],
 }
 
 _FUNCTION_DECLARATIONS = [
@@ -67,7 +85,9 @@ _FUNCTION_DECLARATIONS = [
     {"name": "my_notifications", "description": "Alertas y notificaciones sin leer del usuario (riesgos detectados, resúmenes). Úsala para «tengo alertas», «qué riesgos hay» o «novedades».", "parameters": {"type": "object", "properties": {}}},
     {"name": "knowledge_search", "description": "Busca en los documentos/base de conocimiento de los proyectos del usuario, incluidos los archivos importados desde Drive. Úsala para preguntas sobre el contenido de actas, transcripciones, informes o documentos.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
     {"name": "create_project", "description": "Crea un proyecto en un área del usuario.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}}, "required": ["name"]}},
-    {"name": "create_task", "description": "Crea una tarea dentro de un proyecto.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}, "assignee": {"type": "string", "description": "Nombre o correo del responsable, o 'mí' para el usuario actual."}}, "required": ["title"]}},
+    {"name": "create_task", "description": "Crea UNA sola tarea dentro de un proyecto. Si vas a crear varias, usa create_tasks.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}, "assignee": {"type": "string", "description": "Nombre o correo del responsable, o 'mí' para el usuario actual."}}, "required": ["title"]}},
+    {"name": "create_project_with_tasks", "description": "Crea un proyecto Y su listado completo de tareas en UNA sola confirmación. Úsala siempre que el usuario pida «crea un proyecto y sus tareas», un cronograma o un plan de trabajo, especialmente a partir de un acta o documento adjunto: extrae un nombre de proyecto y TODAS las tareas accionables de una vez (no las crees una por una).", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["name", "tasks"]}},
+    {"name": "create_tasks", "description": "Crea VARIAS tareas a la vez (lote) en un proyecto que YA existe. Úsala cuando el usuario pida añadir un listado/cronograma de tareas a un proyecto existente (no las crees una por una).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["tasks"]}},
     {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (opcional)"}}, "required": ["title"]}},
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
@@ -82,7 +102,46 @@ def _default_when() -> str:
     return datetime.combine(base.date(), time(15, 0), tzinfo=timezone.utc).isoformat()
 
 
+def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:
+    """Convierte la lista de tareas del modelo en dicts limpios (tolera strings y proto)."""
+    items = list(raw) if raw else []
+    out: list[dict[str, Any]] = []
+    for it in items[:50]:
+        if isinstance(it, str):
+            title = it.strip()
+            if title:
+                out.append({"title": title[:300]})
+            continue
+        try:
+            d = dict(it)
+        except (TypeError, ValueError):
+            continue
+        title = str(d.get("title") or "").strip()
+        if not title:
+            continue
+        entry: dict[str, Any] = {"title": title[:300]}
+        if d.get("priority") in ("low", "medium", "high"):
+            entry["priority"] = d["priority"]
+        if d.get("assignee"):
+            entry["assignee"] = str(d["assignee"])
+        if d.get("due_date"):
+            entry["due_date"] = str(d["due_date"])
+        out.append(entry)
+    return out
+
+
 def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    if name == "create_project_with_tasks":
+        return {
+            "name": args.get("name", "Nuevo proyecto"),
+            "area_name": args.get("area_name", ""),
+            "tasks": _normalize_tasks(args.get("tasks")),
+        }
+    if name == "create_tasks":
+        return {
+            "project_name": args.get("project_name", ""),
+            "tasks": _normalize_tasks(args.get("tasks")),
+        }
     if name == "create_meeting":
         return {
             "title": args.get("title", "Reunión"),
@@ -112,6 +171,8 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "send_email": _dev.compose_email_proposal,
         "create_project": _dev.compose_project_proposal,
         "create_task": _dev.compose_task_proposal,
+        "create_project_with_tasks": _dev.compose_create_project_with_tasks_proposal,
+        "create_tasks": _dev.compose_create_tasks_proposal,
         "update_task": _dev.compose_update_task_proposal,
         "assign_task": _dev.compose_assign_task_proposal,
     }[name]
