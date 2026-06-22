@@ -44,6 +44,10 @@ def _system(user: User) -> str:
         "o documento adjunto), usa create_project_with_tasks con TODAS las tareas en una sola "
         "llamada; si pide añadir varias tareas a un proyecto existente, usa create_tasks con la lista "
         "completa. Nunca crees las tareas de una en una ni te detengas tras crear solo el proyecto. "
+        "Cuando te pidan un diagrama de flujo, un proceso o un esquema, responde con un bloque de "
+        "código ```mermaid``` en sintaxis Mermaid (p. ej. `flowchart TD` con nodos y flechas, o "
+        "`sequenceDiagram`); se renderiza como un diagrama profesional en el chat. Si el proceso está "
+        "en un acta o documento adjunto, extrae los pasos de ahí; mantén las etiquetas cortas. "
         "Responde SIEMPRE de "
         "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
     )
