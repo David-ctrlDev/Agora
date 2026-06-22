@@ -139,7 +139,7 @@ async def google_connect(user: User = Depends(get_current_user)) -> RedirectResp
     if settings.google_provider != "real" or not settings.google_client_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google no configurado")
     state = secrets.token_urlsafe(24)
-    response = RedirectResponse(google_oauth.authorize_url(state))
+    response = RedirectResponse(google_oauth.authorize_url(state, prompt="consent"))
     response.set_cookie(
         "g_oauth_state", state, max_age=600, httponly=True,
         secure=settings.session_cookie_secure, samesite="lax", path="/",

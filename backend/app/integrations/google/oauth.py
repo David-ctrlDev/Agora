@@ -10,7 +10,13 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
-def authorize_url(state: str) -> str:
+def authorize_url(state: str, prompt: str | None = None) -> str:
+    """URL de autorización de Google.
+
+    `prompt=consent` solo cuando se conecta Drive explícitamente (garantiza
+    refresh_token). En el login normal se omite: Google pide permisos una vez y
+    luego no vuelve a preguntar.
+    """
     params = {
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_oauth_redirect_uri,
@@ -18,9 +24,10 @@ def authorize_url(state: str) -> str:
         "scope": settings.google_oauth_scopes,
         "access_type": "offline",
         "include_granted_scopes": "true",
-        "prompt": "consent",
         "state": state,
     }
+    if prompt:
+        params["prompt"] = prompt
     if settings.google_allowed_hd:
         params["hd"] = settings.google_allowed_hd
     return f"{AUTH_URL}?{urlencode(params)}"
