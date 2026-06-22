@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Check, Cloud, FileText, FolderOpen, Search, Video, X } from "lucide-react";
-import { useState } from "react";
+import { Calendar, Clock, Cloud, FileText, FolderOpen, Plus, Users, Video, X } from "lucide-react";
+import { useRef, useState } from "react";
 
 import {
   type DriveEntry,
@@ -13,6 +13,8 @@ import {
 } from "../api/google";
 import DriveBrowser from "./DriveBrowser";
 import { Badge, Button, Card, Input, Spinner } from "./ui";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface Props {
   projectId: number;
@@ -56,10 +58,13 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
 
   const [showMeeting, setShowMeeting] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
+  const driveBtnRef = useRef<HTMLButtonElement>(null);
+
   const [title, setTitle] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
-  const [peopleSearch, setPeopleSearch] = useState("");
-  const [when, setWhen] = useState("");
+  const [attendeeInput, setAttendeeInput] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
 
   const invalidateDocs = () =>
     queryClient.invalidateQueries({ queryKey: ["project", projectId, "google-docs"] });
@@ -72,25 +77,37 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
     },
   });
   const meeting = useMutation({
-    mutationFn: () => createMeeting(projectId, { title: title.trim(), attendees, when: when || null }),
+    mutationFn: () =>
+      createMeeting(projectId, {
+        title: title.trim(),
+        attendees,
+        when: date ? (time ? `${date}T${time}` : date) : null,
+      }),
     onSuccess: () => {
       invalidateDocs();
       setShowMeeting(false);
       setTitle("");
       setAttendees([]);
-      setPeopleSearch("");
-      setWhen("");
+      setAttendeeInput("");
+      setDate("");
+      setTime("");
     },
   });
 
-  const toggleAttendee = (email: string) =>
-    setAttendees((a) => (a.includes(email) ? a.filter((x) => x !== email) : [...a, email]));
+  const addAttendee = (email: string) => {
+    const e = email.trim().toLowerCase();
+    if (e && !attendees.includes(e)) setAttendees((a) => [...a, e]);
+    setAttendeeInput("");
+  };
+  const removeAttendee = (email: string) => setAttendees((a) => a.filter((x) => x !== email));
 
   const people = directoryQuery.data ?? [];
-  const q = peopleSearch.trim().toLowerCase();
-  const filteredPeople = people.filter(
-    (u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
-  );
+  const directoryEmails = new Set(people.map((u) => u.email.toLowerCase()));
+  const q = attendeeInput.trim().toLowerCase();
+  const matches = people
+    .filter((u) => !attendees.includes(u.email) && (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)))
+    .slice(0, 6);
+  const canAddExternal = EMAIL_RE.test(q) && !attendees.includes(q) && !directoryEmails.has(q);
 
   const docs = docsQuery.data ?? [];
   const drive = docs.filter((d) => d.source === "drive");
@@ -120,7 +137,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
               <Button size="sm" onClick={() => setShowMeeting((s) => !s)}>
                 <Video className="h-4 w-4" /> Crear reunión
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => setShowDrive(true)}>
+              <Button ref={driveBtnRef} size="sm" variant="secondary" onClick={() => setShowDrive(true)}>
                 <FolderOpen className="h-4 w-4" /> Explorar Drive
               </Button>
             </div>
@@ -131,6 +148,7 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
               title="Importar archivos de Drive"
               actionLabel="Importar"
               multiSelect
+              anchorRef={driveBtnRef}
               busy={importMut.isPending}
               onClose={() => setShowDrive(false)}
               onConfirm={(files) => importMut.mutate(files)}
@@ -160,60 +178,92 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
           )}
 
           {showMeeting && canEdit && (
-            <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <Input
-                label="Título"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Reunión de seguimiento"
-                maxLength={200}
-              />
+            <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+              <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+                <Calendar className="h-4 w-4 text-brand-600" />
+                <span className="text-sm font-semibold text-slate-800">Nueva reunión</span>
+                <span className="ml-auto inline-flex items-center gap-1 text-xs text-slate-400">
+                  <Video className="h-3.5 w-3.5" /> con enlace de Meet
+                </span>
+              </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Invitados (de tu empresa)
-                </label>
-                {attendees.length > 0 && (
-                  <div className="mb-2 flex flex-wrap gap-1.5">
-                    {attendees.map((em) => (
-                      <span
-                        key={em}
-                        className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-xs text-brand-700"
-                      >
-                        {em}
-                        <button type="button" onClick={() => toggleAttendee(em)} className="hover:text-red-600">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
+              <div className="space-y-3.5 p-4">
+                <Input
+                  label="Título"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Reunión de seguimiento"
+                  maxLength={200}
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" /> Fecha
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    />
                   </div>
-                )}
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={peopleSearch}
-                    onChange={(e) => setPeopleSearch(e.target.value)}
-                    placeholder="Buscar persona…"
-                    className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-8 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  />
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" /> Hora
+                    </label>
+                    <input
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    />
+                  </div>
                 </div>
-                <ul className="mt-1.5 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white">
-                  {filteredPeople.length === 0 ? (
-                    <li className="px-3 py-2 text-xs text-slate-400">Sin resultados.</li>
-                  ) : (
-                    filteredPeople.map((u) => {
-                      const selected = attendees.includes(u.email);
-                      return (
+
+                <div>
+                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                    <Users className="h-3.5 w-3.5 text-slate-400" /> Invitados
+                  </label>
+                  {attendees.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {attendees.map((em) => (
+                        <span
+                          key={em}
+                          className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700"
+                        >
+                          {em}
+                          {!directoryEmails.has(em) && <span className="text-[10px] text-brand-400">· externo</span>}
+                          <button type="button" onClick={() => removeAttendee(em)} className="hover:text-red-600">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    value={attendeeInput}
+                    onChange={(e) => setAttendeeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && canAddExternal) {
+                        e.preventDefault();
+                        addAttendee(q);
+                      }
+                    }}
+                    placeholder="Nombre o correo (también externos)…"
+                    className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  />
+                  {q.length > 0 && (matches.length > 0 || canAddExternal) && (
+                    <ul className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                      {matches.map((u) => (
                         <li key={u.email}>
                           <button
                             type="button"
-                            onClick={() => toggleAttendee(u.email)}
+                            onClick={() => addAttendee(u.email)}
                             className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition hover:bg-slate-50"
                           >
-                            <span
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300"}`}
-                            >
-                              {selected && <Check className="h-3 w-3" />}
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
+                              {u.name.slice(0, 2).toUpperCase()}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-sm">
                               <span className="text-slate-800">{u.name}</span>{" "}
@@ -221,28 +271,37 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
                             </span>
                           </button>
                         </li>
-                      );
-                    })
+                      ))}
+                      {canAddExternal && (
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => addAttendee(q)}
+                            className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2 text-left text-sm text-brand-700 transition hover:bg-brand-50"
+                          >
+                            <Plus className="h-4 w-4" /> Agregar externo «{q}»
+                          </button>
+                        </li>
+                      )}
+                    </ul>
                   )}
-                </ul>
-              </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Escribe un correo y pulsa Enter para invitar a alguien externo a la empresa.
+                  </p>
+                </div>
 
-              <Input label="Fecha" type="date" value={when} onChange={(e) => setWhen(e.target.value)} />
-              <div className="flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setShowMeeting(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => meeting.mutate()}
-                  disabled={!title.trim() || meeting.isPending}
-                >
-                  {meeting.isPending ? "Creando…" : "Crear reunión"}
-                </Button>
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                  <Button size="sm" variant="ghost" onClick={() => setShowMeeting(false)}>
+                    Cancelar
+                  </Button>
+                  <Button size="sm" onClick={() => meeting.mutate()} disabled={!title.trim() || meeting.isPending}>
+                    {meeting.isPending ? "Creando…" : "Crear reunión"}
+                  </Button>
+                </div>
+                {meeting.isError && (
+                  <p className="text-sm text-red-600">{(meeting.error as Error).message}</p>
+                )}
               </div>
-              {meeting.isError && (
-                <p className="text-sm text-red-600">{(meeting.error as Error).message}</p>
-              )}
             </div>
           )}
 

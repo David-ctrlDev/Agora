@@ -132,6 +132,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const driveBtnRef = useRef<HTMLButtonElement>(null);
 
   const conversationsQuery = useQuery({ queryKey: ["agent-convs"], queryFn: listConversations });
   const googleQuery = useQuery({ queryKey: ["google-status"], queryFn: googleStatus });
@@ -450,6 +451,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
             <Paperclip className="h-4 w-4" />
           </button>
           <button
+            ref={driveBtnRef}
             type="button"
             onClick={() => driveConnected && setShowDrive(true)}
             disabled={attaching || !driveConnected}
@@ -485,6 +487,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
         <DriveBrowser
           title="Adjuntar desde Drive"
           actionLabel="Enviar al agente"
+          anchorRef={driveBtnRef}
           busy={attachDrive.isPending}
           pendingId={attachDrive.isPending ? (attachDrive.variables ?? null) : null}
           onClose={() => setShowDrive(false)}

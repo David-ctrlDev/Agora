@@ -10,7 +10,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 import { type DriveEntry, browseDrive } from "../api/google";
 import { Spinner } from "./ui";
@@ -26,10 +26,19 @@ interface Props {
   multiSelect?: boolean;
   busy?: boolean;
   pendingId?: string | null;
+  anchorRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onPick?: (entry: DriveEntry) => void;
   onConfirm?: (entries: DriveEntry[]) => void;
 }
+
+const CENTERED: CSSProperties = {
+  left: "50%",
+  top: "50%",
+  transform: "translate(-50%, -50%)",
+  width: "min(440px, calc(100vw - 1rem))",
+  maxHeight: "80vh",
+};
 
 function fileIcon(mime: string | null) {
   const m = mime ?? "";
@@ -49,6 +58,7 @@ export default function DriveBrowser({
   multiSelect = false,
   busy = false,
   pendingId = null,
+  anchorRef,
   onClose,
   onPick,
   onConfirm,
@@ -58,6 +68,22 @@ export default function DriveBrowser({
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
   const [selected, setSelected] = useState<Record<string, DriveEntry>>({});
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>(CENTERED);
+
+  // Posiciona el popover junto al botón que lo abrió, siempre dentro del viewport.
+  useLayoutEffect(() => {
+    const el = anchorRef?.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const W = 440;
+    const maxHeight = Math.min(460, window.innerHeight - 24);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8));
+    // Debajo del botón; si no cabe, encima. Luego se fuerza dentro del viewport.
+    let top = r.bottom + 8;
+    if (top + maxHeight > window.innerHeight - 8) top = r.top - 8 - maxHeight;
+    top = Math.max(8, Math.min(top, window.innerHeight - maxHeight - 8));
+    setPanelStyle({ left, top, width: "min(440px, calc(100vw - 1rem))", maxHeight, transform: "none" });
+  }, [anchorRef]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(term.trim()), 400);
@@ -111,8 +137,12 @@ export default function DriveBrowser({
   const selectedList = Object.values(selected);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-pop"
+        style={panelStyle}
+      >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <Folder className="h-4 w-4 text-brand-600" /> {title}
@@ -250,6 +280,6 @@ export default function DriveBrowser({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
