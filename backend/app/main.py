@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.routers import (
+    admin,
     agent,
     analytics,
     areas,
@@ -36,6 +37,7 @@ app.include_router(sprints.router)
 app.include_router(economics.router)
 app.include_router(audit.router)
 app.include_router(users.router)
+app.include_router(admin.router)
 
 
 @app.get("/api/health", tags=["health"])

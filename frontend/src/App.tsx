@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import Layout from "./components/Layout";
 import RequireAuth from "./components/RequireAuth";
+import AdminPage from "./pages/AdminPage";
 import AgentPage from "./pages/AgentPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import AreasPage from "./pages/AreasPage";
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/agente" element={<AgentPage />} />
           <Route path="/notificaciones" element={<NotificationsPage />} />
           <Route path="/seguridad" element={<SecurityPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Route>
       </Route>
