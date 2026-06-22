@@ -288,24 +288,27 @@ export default function ProjectsPage() {
           ) : (
             <Card className="overflow-hidden p-0">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-sm">
+                <table className="w-full min-w-[1080px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <th className="px-3 py-2.5">Iniciativa</th>
                       <th className="px-3 py-2.5">Proyecto</th>
-                      <th className="px-3 py-2.5">Tipo</th>
+                      <th className="px-3 py-2.5">Estado</th>
+                      <th className="px-3 py-2.5">Avance</th>
+                      <th className="px-3 py-2.5">Inicio</th>
+                      <th className="px-3 py-2.5">Entrega</th>
+                      <th className="px-3 py-2.5">Líder</th>
                       <th className="px-3 py-2.5">Categoría</th>
                       <th className="px-3 py-2.5">Criticidad</th>
+                      <th className="px-3 py-2.5">Tipo</th>
                       <th className="px-3 py-2.5">Proceso</th>
-                      <th className="px-3 py-2.5">Líder</th>
-                      <th className="px-3 py-2.5">Estado</th>
-                      <th className="px-3 py-2.5 text-right">Avance</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filtered.map((p: Project) => {
                       const st = PROJECT_STATUS[p.status] ?? { label: p.status, tone: "neutral" as const };
                       const crit = (p.criticality ?? "").toUpperCase();
+                      const overdue =
+                        p.due_date != null && new Date(p.due_date) < new Date() && p.status !== "done";
                       return (
                         <tr
                           key={p.id}
@@ -313,29 +316,48 @@ export default function ProjectsPage() {
                           className="cursor-pointer transition hover:bg-slate-50"
                         >
                           <td className="px-3 py-2.5">
-                            {p.initiative ? (
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
-                                {p.initiative}
-                              </span>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5">
                             <div className="flex items-center gap-2">
                               <span
                                 className="h-2 w-2 shrink-0 rounded-full"
                                 style={{ background: STATUS_ACCENT[p.status] ?? "#cbd5e1" }}
                               />
-                              <span
-                                className="block max-w-[280px] truncate font-medium text-slate-900"
-                                title={p.name}
-                              >
-                                {p.name}
+                              <div className="min-w-0">
+                                <div className="max-w-[260px] truncate font-medium text-slate-900" title={p.name}>
+                                  {p.name}
+                                </div>
+                                {p.initiative && (
+                                  <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                                    {p.initiative}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <Badge tone={st.tone}>{st.label}</Badge>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-20 rounded-full bg-slate-100">
+                                <div
+                                  className="h-1.5 rounded-full bg-brand-500"
+                                  style={{ width: `${p.progress}%` }}
+                                />
+                              </div>
+                              <span className="w-8 text-right tabular-nums text-xs text-slate-500">
+                                {p.progress}%
                               </span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-500">{dash(p.project_type)}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">
+                            {fmtDate(p.start_date)}
+                          </td>
+                          <td
+                            className={`whitespace-nowrap px-3 py-2.5 text-xs ${overdue ? "font-semibold text-red-600" : "text-slate-500"}`}
+                          >
+                            {fmtDate(p.due_date)}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-500">{dash(p.owner_name)}</td>
                           <td className="px-3 py-2.5 text-slate-500">{dash(p.category)}</td>
                           <td className="px-3 py-2.5">
                             {crit ? (
@@ -348,24 +370,8 @@ export default function ProjectsPage() {
                               <span className="text-slate-300">—</span>
                             )}
                           </td>
+                          <td className="px-3 py-2.5 text-slate-500">{dash(p.project_type)}</td>
                           <td className="px-3 py-2.5 text-slate-500">{dash(p.process)}</td>
-                          <td className="px-3 py-2.5 text-slate-500">{dash(p.owner_name)}</td>
-                          <td className="px-3 py-2.5">
-                            <Badge tone={st.tone}>{st.label}</Badge>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="h-1.5 w-16 rounded-full bg-slate-100">
-                                <div
-                                  className="h-1.5 rounded-full bg-brand-500"
-                                  style={{ width: `${p.progress}%` }}
-                                />
-                              </div>
-                              <span className="w-9 text-right tabular-nums text-xs text-slate-500">
-                                {p.progress}%
-                              </span>
-                            </div>
-                          </td>
                         </tr>
                       );
                     })}
