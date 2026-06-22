@@ -40,6 +40,21 @@ class Project(Base):
     process: Mapped[str | None] = mapped_column(String(120), nullable=True)
     benefits: Mapped[str | None] = mapped_column(Text, nullable=True)
     change_management: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # --- ROI ampliado: lado ejecutor (el proceso que lo hace) ---
+    effort_hours_estimated: Mapped[float | None] = mapped_column(Float, nullable=True)
+    effort_hours_actual: Mapped[float | None] = mapped_column(Float, nullable=True)
+    executor_team: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    implementation_complexity: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    resources_needed: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # --- ROI ampliado: lado beneficiario (el proceso para el que se hace) ---
+    beneficiary_area_id: Mapped[int | None] = mapped_column(
+        ForeignKey("areas.id", ondelete="SET NULL"), nullable=True
+    )
+    beneficiary_process: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    hours_saved_monthly: Mapped[float | None] = mapped_column(Float, nullable=True)
+    people_impacted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    risk_reduction: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    strategic_value: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

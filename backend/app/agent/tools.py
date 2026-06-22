@@ -267,6 +267,11 @@ async def project_details(db: AsyncSession, user: User, project_name: str) -> di
     sprints = (
         await db.execute(select(func.count(Sprint.id)).where(Sprint.project_id == project.id))
     ).scalar() or 0
+    beneficiary_area = None
+    if ec.beneficiary_area_id:
+        beneficiary_area = (
+            await db.execute(select(Area.name).where(Area.id == ec.beneficiary_area_id))
+        ).scalar_one_or_none()
     return {
         "name": project.name,
         "area": area_name,
@@ -291,10 +296,31 @@ async def project_details(db: AsyncSession, user: User, project_name: str) -> di
         "economics": {
             "currency": ec.currency,
             "has_data": ec.has_data,
+            "has_impact": ec.has_impact,
             "estimated_cost": ec.estimated_cost,
+            "actual_cost": ec.actual_cost,
             "expected_benefit": ec.expected_benefit,
+            "actual_benefit": ec.actual_benefit,
             "roi_expected_pct": ec.roi_expected_pct,
             "roi_actual_pct": ec.roi_actual_pct,
+            "executor": {
+                "area": area_name,
+                "process": ec.executor_process,
+                "effort_hours_estimated": ec.effort_hours_estimated,
+                "effort_hours_actual": ec.effort_hours_actual,
+                "team": ec.executor_team,
+                "complexity": ec.implementation_complexity,
+                "resources": ec.resources_needed,
+            },
+            "beneficiary": {
+                "area": beneficiary_area,
+                "process": ec.beneficiary_process,
+                "hours_saved_monthly": ec.hours_saved_monthly,
+                "hours_saved_yearly": ec.hours_saved_yearly,
+                "people_impacted": ec.people_impacted,
+                "risk_reduction": ec.risk_reduction,
+                "strategic_value": ec.strategic_value,
+            },
         },
     }
 
