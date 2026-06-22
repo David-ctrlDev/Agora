@@ -32,7 +32,10 @@ def _system(user: User) -> str:
         "por áreas o del portafolio (avance y proyectos en riesgo) usa areas_overview; para "
         "vencimientos y «qué se entrega pronto» usa upcoming_deliveries; para alertas y riesgos usa "
         "my_notifications; para el contenido de documentos, actas o transcripciones (incluidos los "
-        "importados de Drive) usa knowledge_search. Si preguntan por «mis tareas» o «qué "
+        "importados de Drive) usa knowledge_search. Para las reuniones del usuario, su agenda o «qué "
+        "reuniones tengo» (hoy, esta semana, este mes) usa my_meetings con el parámetro days "
+        "adecuado (1, 7 o 30); si devuelve connected=false, dile que conecte su cuenta de Google. "
+        "Si preguntan por «mis tareas» o «qué "
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
         "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
         "tarea, crear reunión, enviar correo, cambiar o asignar tareas) llama a la herramienta "
@@ -60,6 +63,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "project_details", "description": "Ficha detallada de un proyecto por su nombre: estado, líder, avance %, categoría, criticidad, fechas (y días para la entrega), tareas abiertas/vencidas/hechas, nº de sprints y economía (coste estimado, beneficio esperado, ROI esperado y real). Úsala para preguntas a fondo sobre un proyecto o sobre su ROI/rentabilidad.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "areas_overview", "description": "Panorama por área (nº de proyectos, % de avance y cuántos en riesgo) y totales globales accesibles. Úsala para «cómo va cada área», comparativas entre áreas o el estado general del portafolio.", "parameters": {"type": "object", "properties": {}}},
     {"name": "upcoming_deliveries", "description": "Próximas entregas: proyectos no terminados con fecha de entrega, de la más cercana en adelante (con días restantes y avance). Úsala para «qué se entrega pronto», vencimientos o planificación.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "my_meetings", "description": "Reuniones próximas del calendario de Google del usuario (las suyas, no por proyecto): título, fecha/hora, enlace de Meet, lugar y asistentes. Úsala para «qué reuniones tengo», «mi agenda» o «esta semana». El parámetro «days» indica cuántos días hacia adelante mirar (1 = hoy, 7 = esta semana, 30 = este mes).", "parameters": {"type": "object", "properties": {"days": {"type": "integer", "description": "Días hacia adelante (por defecto 7)."}}}},
     {"name": "my_notifications", "description": "Alertas y notificaciones sin leer del usuario (riesgos detectados, resúmenes). Úsala para «tengo alertas», «qué riesgos hay» o «novedades».", "parameters": {"type": "object", "properties": {}}},
     {"name": "knowledge_search", "description": "Busca en los documentos/base de conocimiento de los proyectos del usuario, incluidos los archivos importados desde Drive. Úsala para preguntas sobre el contenido de actas, transcripciones, informes o documentos.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
     {"name": "create_project", "description": "Crea un proyecto en un área del usuario.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}}, "required": ["name"]}},
@@ -135,6 +139,8 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.areas_overview(db, user)
     if name == "upcoming_deliveries":
         return await tools.upcoming_deliveries(db, user)
+    if name == "my_meetings":
+        return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
     if name == "my_notifications":
         return await tools.my_notifications(db, user)
     if name == "knowledge_search":

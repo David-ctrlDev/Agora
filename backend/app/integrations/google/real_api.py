@@ -168,15 +168,22 @@ async def fetch_drive_file_content(access_token: str, file_id: str) -> tuple[str
         return name, mime, resp.content
 
 
-async def list_calendar_events(access_token: str, limit: int = 15) -> list[dict]:
+async def list_calendar_events(
+    access_token: str,
+    limit: int = 15,
+    time_min: str | None = None,
+    time_max: str | None = None,
+) -> list[dict]:
     from datetime import datetime, timezone
 
     params = {
         "maxResults": limit,
         "orderBy": "startTime",
         "singleEvents": "true",
-        "timeMin": datetime.now(timezone.utc).isoformat(),
+        "timeMin": time_min or datetime.now(timezone.utc).isoformat(),
     }
+    if time_max:
+        params["timeMax"] = time_max
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         r = await client.get(
             "https://www.googleapis.com/calendar/v3/calendars/primary/events",
@@ -187,14 +194,23 @@ async def list_calendar_events(access_token: str, limit: int = 15) -> list[dict]
         data = r.json()
     out = []
     for e in data.get("items", []):
+        if e.get("status") == "cancelled":
+            continue
         start = e.get("start") or {}
+        end = e.get("end") or {}
+        attendees = [a.get("email") for a in (e.get("attendees") or []) if a.get("email")]
         out.append(
             {
                 "external_id": e["id"],
                 "title": e.get("summary", "(sin título)"),
                 "web_url": e.get("htmlLink"),
                 "starts_at": start.get("dateTime") or start.get("date"),
+                "ends_at": end.get("dateTime") or end.get("date"),
+                "all_day": "date" in start,
                 "meet_url": e.get("hangoutLink"),
+                "location": e.get("location"),
+                "organizer": (e.get("organizer") or {}).get("email"),
+                "attendees": attendees[:12],
             }
         )
     return out

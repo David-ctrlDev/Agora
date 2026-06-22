@@ -345,6 +345,38 @@ async def read_drive_file(db: AsyncSession, user: User, file_id: str) -> tuple[s
     )
 
 
+async def list_my_meetings(db: AsyncSession, user: User, days: int = 7) -> list[dict]:
+    """Próximas reuniones del calendario del usuario (las suyas) en los próximos `days` días."""
+    days = max(1, min(int(days or 7), 60))
+    if settings.google_provider == "real":
+        access = await get_access_token(db, user)
+        if not access:
+            raise GoogleNotConnected()
+        now = datetime.now(timezone.utc)
+        return await real_api.list_calendar_events(
+            access,
+            limit=25,
+            time_min=now.isoformat(),
+            time_max=(now + timedelta(days=days)).isoformat(),
+        )
+    # Mock/desarrollo: una reunión ilustrativa para no dejar el dev vacío.
+    base = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    return [
+        {
+            "external_id": "mock-evt-1",
+            "title": "Seguimiento semanal de proyecto",
+            "web_url": None,
+            "starts_at": (base + timedelta(days=1, hours=2)).isoformat(),
+            "ends_at": (base + timedelta(days=1, hours=3)).isoformat(),
+            "all_day": False,
+            "meet_url": "https://meet.google.com/mock-mock-mock",
+            "location": None,
+            "organizer": user.email,
+            "attendees": [user.email],
+        }
+    ]
+
+
 async def free_busy(
     db: AsyncSession, user: User, emails: list[str], time_min: str, time_max: str
 ) -> dict[str, list[dict]]:

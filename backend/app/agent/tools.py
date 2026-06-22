@@ -348,6 +348,23 @@ async def upcoming_deliveries(db: AsyncSession, user: User, limit: int = 10) -> 
     ]
 
 
+async def my_meetings(db: AsyncSession, user: User, days: int = 7) -> dict[str, Any]:
+    """Próximas reuniones del calendario de Google del usuario (las suyas, no por proyecto)."""
+    from app.services import google as google_service
+
+    try:
+        events = await google_service.list_my_meetings(db, user, days=days)
+    except google_service.GoogleNotConnected:
+        return {"connected": False, "events": []}
+    except Exception:
+        return {
+            "connected": True,
+            "error": "No se pudo leer el calendario; revisa los permisos de Google.",
+            "events": [],
+        }
+    return {"connected": True, "days": days, "events": events}
+
+
 async def my_notifications(db: AsyncSession, user: User, limit: int = 10) -> list[dict[str, Any]]:
     """Alertas/notificaciones sin leer del usuario (riesgos detectados, resúmenes)."""
     from app.services import notifications as notif_service
