@@ -34,6 +34,16 @@ async def _project(project_id: int, user: User, db: AsyncSession, *, edit: bool 
     return project
 
 
+async def _mirror_to_drive(db: AsyncSession, project: Project, document: Document) -> None:
+    """Sube el documento a la carpeta del proyecto en Drive (si está activo). Nunca falla la request."""
+    try:
+        from app.services import drive_docs
+
+        await drive_docs.push_document(db, project, document)
+    except Exception:
+        pass
+
+
 @router.post(
     "/projects/{project_id}/documents", response_model=DocumentRead, status_code=status.HTTP_201_CREATED
 )
@@ -43,7 +53,7 @@ async def create_document(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Document:
-    await _project(project_id, user, db, edit=True)
+    project = await _project(project_id, user, db, edit=True)
     document = await svc.ingest_document(
         db, project_id, payload.title, payload.content, source=payload.source
     )
@@ -56,6 +66,7 @@ async def create_document(
         summary=f"Documento añadido: {document.title}",
         actor_id=user.id,
     )
+    await _mirror_to_drive(db, project, document)
     return document
 
 
@@ -72,7 +83,7 @@ async def upload_document(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Document:
-    await _project(project_id, user, db, edit=True)
+    project = await _project(project_id, user, db, edit=True)
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(
@@ -110,6 +121,7 @@ async def upload_document(
         summary=f"Archivo subido: {document.title}",
         actor_id=user.id,
     )
+    await _mirror_to_drive(db, project, document)
     return document
 
 

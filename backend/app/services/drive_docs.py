@@ -3,11 +3,14 @@
 Ágora es el espejo + vectorizador; Drive es el repositorio visible cuando hay conexión.
 Todo es "best-effort": si Drive falla o no hay conexión, el proyecto sigue funcionando local.
 """
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.integrations.google import real_api
+from app.models.document import Document
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.user import User
@@ -78,3 +81,41 @@ async def ensure_project_folder(
     await db.refresh(project)
     await share_with_members(db, project, access, folder)
     return folder
+
+
+def _file_name(document: Document) -> str:
+    if document.file_name:
+        return document.file_name
+    title = (document.title or "documento").strip()
+    if document.source == "diagram":
+        return f"{title}.mmd"
+    return f"{title}.txt"
+
+
+async def push_document(db: AsyncSession, project: Project, document: Document) -> None:
+    """Sube a la carpeta del proyecto en Drive un documento creado/cargado desde Ágora.
+
+    No re-sube lo que ya vino de Drive. Best-effort: si Drive falla, el documento
+    queda igual en Ágora (que es la fuente de verdad/espejo).
+    """
+    if not enabled() or document.source == "drive" or document.drive_file_id:
+        return
+    access = await _owner_access(db, project)
+    if not access:
+        return
+    folder = await ensure_project_folder(db, project, access)
+    if not folder:
+        return
+    data = document.file_data or (document.content_text or "").encode("utf-8")
+    if not data:
+        return
+    try:
+        res = await real_api.upload_file(
+            access, folder, _file_name(document), document.mime_type or "text/plain", data
+        )
+    except Exception:
+        return
+    document.drive_file_id = res.get("id")
+    document.drive_checksum = res.get("md5Checksum")
+    document.drive_synced_at = datetime.now(timezone.utc)
+    await db.commit()

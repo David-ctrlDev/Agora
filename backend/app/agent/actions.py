@@ -269,9 +269,15 @@ async def execute_save_diagram(db: AsyncSession, user: User, params: dict[str, A
     if not code:
         return {"ok": False, "error": "no recibí el diagrama a guardar."}
     title = (params.get("title") or "Diagrama").strip()[:300]
-    await knowledge_service.ingest_document(
+    document = await knowledge_service.ingest_document(
         db, project.id, title, code, source="diagram", mime_type="text/vnd.mermaid"
     )
+    try:
+        from app.services import drive_docs
+
+        await drive_docs.push_document(db, project, document)
+    except Exception:
+        pass
     return {"ok": True, "project": project.name, "title": title}
 
 

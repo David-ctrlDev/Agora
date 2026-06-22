@@ -46,7 +46,8 @@ class Settings(BaseSettings):
     # (p. ej. de un formulario) y los valores por defecto se interpretan aquí.
     app_utc_offset_hours: int = -5
     # Documentación en Drive como "filesystem" del proyecto (carpeta + sync/re-vectorizado).
-    drive_docs_enabled: bool = False
+    # Activo, pero solo opera con google_provider=real + el owner con Drive conectado (escritura).
+    drive_docs_enabled: bool = True
     # Cuenta operadora (Workspace) cuyo token usa el job de sync sin usuario presente.
     drive_docs_operator_email: str = ""
     # Carpeta raíz (o Unidad compartida) donde se crean las carpetas de proyecto; vacío => raíz del operador.
