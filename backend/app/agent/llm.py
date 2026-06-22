@@ -303,6 +303,19 @@ class DevAgentLLM:
         n = len(result.get("tasks", []))
         return f"✅ {n} tarea(s) creada(s) en «{result['project']}»."
 
+    def compose_save_diagram_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a guardar este diagrama en la documentación del proyecto (requiere tu confirmación):\n"
+            f"• Título: {args.get('title') or 'Diagrama'}\n"
+            f"• Proyecto: {args.get('project_name') or '(no indicado)'}\n"
+            "Pulsa «Confirmar» para guardarlo."
+        )
+
+    def compose_save_diagram_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude guardar el diagrama: {result.get('error', 'error desconocido')}"
+        return f"✅ Diagrama «{result['title']}» guardado en la documentación de «{result['project']}»."
+
     def compose_meeting_result(self, result: dict[str, Any]) -> str:
         return f"✅ Reunión creada: «{result['title']}». Enlace de Meet: {result['meet_url']}"
 

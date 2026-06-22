@@ -9,7 +9,13 @@ function isMermaid(className: unknown): boolean {
 }
 
 /** Renderiza Markdown del agente (listas, negritas, enlaces, diagramas) con estilos sobrios. */
-export default function Markdown({ children }: { children: string }) {
+export default function Markdown({
+  children,
+  diagramsSaveable = false,
+}: {
+  children: string;
+  diagramsSaveable?: boolean;
+}) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -27,7 +33,7 @@ export default function Markdown({ children }: { children: string }) {
         },
         code: ({ node, className, children: kids, ...props }) => {
           if (isMermaid(className)) {
-            return <Mermaid code={String(kids).replace(/\n$/, "")} />;
+            return <Mermaid code={String(kids).replace(/\n$/, "")} saveable={diagramsSaveable} />;
           }
           return (
             <code className="rounded bg-slate-200/70 px-1 py-0.5 text-[0.8em]" {...props}>

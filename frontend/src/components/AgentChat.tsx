@@ -103,7 +103,7 @@ function MessageRow({
     <div className="animate-fade-in">
       <AssistantLabel />
       <div className="border-l-2 border-brand-400/40 pl-3.5 text-[15px] leading-relaxed text-slate-700">
-        <Markdown>{message.content}</Markdown>
+        <Markdown diagramsSaveable>{message.content}</Markdown>
         {status === "pending" && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button

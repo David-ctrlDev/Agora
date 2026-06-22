@@ -239,6 +239,42 @@ async def execute_create_tasks(db: AsyncSession, user: User, params: dict[str, A
     return {"ok": True, "project": project.name, "tasks": created}
 
 
+async def execute_save_diagram(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Guarda un diagrama (código Mermaid) en la documentación de un proyecto."""
+    from sqlalchemy import func, select
+
+    from app.models.project import Project
+    from app.services import knowledge as knowledge_service
+    from app.services import projects as projects_svc
+
+    project_ids = await projects_svc.accessible_project_ids(db, user)
+    if not project_ids:
+        return {"ok": False, "error": "no tienes proyectos accesibles."}
+    rows = (
+        await db.execute(
+            select(Project)
+            .where(Project.id.in_(project_ids))
+            .order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    wanted = _norm(params.get("project_name") or "")
+    project = next((p for p in rows if wanted and wanted in _norm(p.name)), None)
+    if project is None and len(rows) == 1:
+        project = rows[0]
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
+    code = (params.get("mermaid") or "").strip()
+    if not code:
+        return {"ok": False, "error": "no recibí el diagrama a guardar."}
+    title = (params.get("title") or "Diagrama").strip()[:300]
+    await knowledge_service.ingest_document(
+        db, project.id, title, code, source="diagram", mime_type="text/vnd.mermaid"
+    )
+    return {"ok": True, "project": project.name, "title": title}
+
+
 async def _find_task(db: AsyncSession, user: User, title: str):
     from sqlalchemy import func, select
 

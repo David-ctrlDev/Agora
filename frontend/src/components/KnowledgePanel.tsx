@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Download, Eye, FileText, Plus, Trash2, Upload } from "lucide-react";
+import { BookOpen, Download, Eye, FileText, Plus, Trash2, Upload, Workflow } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
 
 import {
@@ -13,13 +13,16 @@ import {
   uploadDocument,
   versionDownloadUrl,
 } from "../api/knowledge";
+import Mermaid from "./Mermaid";
 import { Badge, Button, Card, Input, Modal, Select, Spinner, Textarea } from "./ui";
 
 const SOURCE_LABEL: Record<string, string> = {
   manual: "Texto",
   file: "Archivo",
   transcript: "Transcripción",
+  drive: "Drive",
   google_drive: "Drive",
+  diagram: "Diagrama",
 };
 
 const ACCEPT = ".pdf,.docx,.txt,.md,.csv,.vtt,.srt";
@@ -96,7 +99,7 @@ export default function KnowledgePanel({ projectId, canEdit }: Props) {
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-slate-700" />
-          <h2 className="text-sm font-semibold text-slate-700">Base de conocimiento</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Documentación</h2>
         </div>
         {canEdit && (
           <div className="flex gap-2">
@@ -176,7 +179,11 @@ export default function KnowledgePanel({ projectId, canEdit }: Props) {
         <ul className="divide-y divide-slate-100">
           {docs.map((d) => (
             <li key={d.id} className="flex items-center gap-3 py-2">
-              <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+              {d.source === "diagram" ? (
+                <Workflow className="h-4 w-4 shrink-0 text-brand-500" />
+              ) : (
+                <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-slate-900">{d.title}</div>
                 <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -224,9 +231,13 @@ export default function KnowledgePanel({ projectId, canEdit }: Props) {
           <Spinner label="Cargando…" />
         ) : (
           <div className="space-y-4">
-            <pre className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-              {preview.data?.content_text || "Sin texto disponible."}
-            </pre>
+            {preview.data?.source === "diagram" && preview.data.content_text ? (
+              <Mermaid code={preview.data.content_text} />
+            ) : (
+              <pre className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+                {preview.data?.content_text || "Sin texto disponible."}
+              </pre>
+            )}
             <div className="border-t border-slate-100 pt-3">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">

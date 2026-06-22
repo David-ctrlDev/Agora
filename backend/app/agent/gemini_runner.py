@@ -48,6 +48,8 @@ def _system(user: User) -> str:
         "código ```mermaid``` en sintaxis Mermaid (p. ej. `flowchart TD` con nodos y flechas, o "
         "`sequenceDiagram`); se renderiza como un diagrama profesional en el chat. Si el proceso está "
         "en un acta o documento adjunto, extrae los pasos de ahí; mantén las etiquetas cortas. "
+        "Si el usuario pide guardar o asignar un diagrama a un proyecto, usa save_diagram con el "
+        "código Mermaid del diagrama; queda en la documentación del proyecto. "
         "Responde SIEMPRE de "
         "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
     )
@@ -61,6 +63,7 @@ _ACTION_TOOLS = {
     "send_email",
     "update_task",
     "assign_task",
+    "save_diagram",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -96,6 +99,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
     {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
+    {"name": "save_diagram", "description": "Guarda en la documentación de un proyecto un diagrama que TÚ generaste (código Mermaid). Úsala cuando el usuario pida guardar o asignar un diagrama a un proyecto. Pasa el código Mermaid completo del diagrama del que se habla.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string"}, "mermaid": {"type": "string", "description": "Código Mermaid completo del diagrama a guardar."}}, "required": ["project_name", "mermaid"]}},
 ]
 
 _TOOLS = [types.Tool(function_declarations=_FUNCTION_DECLARATIONS)]
@@ -166,6 +170,12 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
         return {"title": args.get("title", ""), "status": args.get("status", "done")}
     if name == "assign_task":
         return {"title": args.get("title", ""), "assignee": args.get("assignee", "")}
+    if name == "save_diagram":
+        return {
+            "project_name": args.get("project_name", ""),
+            "title": args.get("title") or "Diagrama",
+            "mermaid": args.get("mermaid", ""),
+        }
     return dict(args)
 
 
@@ -179,6 +189,7 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "create_tasks": _dev.compose_create_tasks_proposal,
         "update_task": _dev.compose_update_task_proposal,
         "assign_task": _dev.compose_assign_task_proposal,
+        "save_diagram": _dev.compose_save_diagram_proposal,
     }[name]
     return composer(params)
 
