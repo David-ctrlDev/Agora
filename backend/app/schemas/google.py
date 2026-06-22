@@ -34,6 +34,12 @@ class DriveImport(BaseModel):
     files: list[DriveImportItem] = []
 
 
+class FreeBusyQuery(BaseModel):
+    emails: list[str] = []
+    time_min: str
+    time_max: str
+
+
 class GoogleDocumentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -321,6 +321,21 @@ async def read_drive_file(db: AsyncSession, user: User, file_id: str) -> tuple[s
     )
 
 
+async def free_busy(
+    db: AsyncSession, user: User, emails: list[str], time_min: str, time_max: str
+) -> dict[str, list[dict]]:
+    """Disponibilidad (ocupado/libre) de las personas indicadas en una ventana."""
+    cleaned = [e.strip() for e in emails if e.strip()]
+    if not cleaned:
+        return {}
+    if settings.google_provider == "real":
+        access = await get_access_token(db, user)
+        if not access:
+            raise GoogleNotConnected()
+        return await real_api.free_busy(access, cleaned, time_min, time_max)
+    return {e: [] for e in cleaned}
+
+
 async def list_documents(db: AsyncSession, project_id: int) -> list[GoogleDocument]:
     result = await db.execute(
         select(GoogleDocument)

@@ -8,6 +8,7 @@ from app.models.project import Project
 from app.models.user import User
 from app.schemas.google import (
     DriveImport,
+    FreeBusyQuery,
     GoogleDocumentRead,
     GoogleStatus,
     MeetingCreate,
@@ -121,6 +122,26 @@ async def google_directory(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[dict]:
     return await svc.list_directory(db, user)
+
+
+@router.post("/google/freebusy")
+async def google_freebusy(
+    payload: FreeBusyQuery,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, list[dict]]:
+    try:
+        return await svc.free_busy(db, user, payload.emails, payload.time_min, payload.time_max)
+    except svc.GoogleNotConnected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Conecta tu cuenta de Google primero"
+        ) from None
+    except Exception:
+        # p. ej. el token aún no tiene el permiso de calendarios (reconectar Google).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo leer la disponibilidad; reconecta Google para el permiso de calendarios",
+        ) from None
 
 
 @router.get("/google/drive")

@@ -64,3 +64,15 @@ export const createMeeting = (
   projectId: number,
   payload: { title: string; attendees: string[]; when?: string | null },
 ) => api.post<MeetingResult>(`/api/projects/${projectId}/google/meetings`, payload);
+
+export interface BusySlot {
+  start: string;
+  end: string;
+}
+
+export const freeBusy = (emails: string[], timeMin: string, timeMax: string) =>
+  api.post<Record<string, BusySlot[]>>("/api/google/freebusy", {
+    emails,
+    time_min: timeMin,
+    time_max: timeMax,
+  });

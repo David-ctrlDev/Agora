@@ -36,6 +36,7 @@ class Settings(BaseSettings):
         "openid email profile "
         "https://www.googleapis.com/auth/directory.readonly "
         "https://www.googleapis.com/auth/calendar.events "
+        "https://www.googleapis.com/auth/calendar.freebusy "
         "https://www.googleapis.com/auth/drive.readonly "
         "https://www.googleapis.com/auth/gmail.send"
     )

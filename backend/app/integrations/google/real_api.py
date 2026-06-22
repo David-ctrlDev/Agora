@@ -234,6 +234,27 @@ async def create_meeting(
     }
 
 
+async def free_busy(
+    access_token: str, emails: list[str], time_min: str, time_max: str
+) -> dict[str, list[dict]]:
+    """Intervalos ocupados de cada persona en una ventana (Calendar freeBusy)."""
+    body = {"timeMin": time_min, "timeMax": time_max, "items": [{"id": e} for e in emails]}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.post(
+            "https://www.googleapis.com/calendar/v3/freeBusy",
+            json=body,
+            headers=_headers(access_token),
+        )
+        r.raise_for_status()
+        data = r.json()
+    out: dict[str, list[dict]] = {}
+    for email, info in (data.get("calendars") or {}).items():
+        out[email] = [
+            {"start": b.get("start"), "end": b.get("end")} for b in (info.get("busy") or [])
+        ]
+    return out
+
+
 async def send_email(access_token: str, to: list[str], subject: str, body: str) -> dict:
     message = EmailMessage()
     message["To"] = ", ".join(to)
