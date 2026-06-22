@@ -74,7 +74,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-sm font-bold text-white shadow-sm">
@@ -89,7 +89,7 @@ export default function Layout() {
         <div className="px-5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           Plataforma
         </div>
-        <nav className="flex-1 space-y-0.5 px-3">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
