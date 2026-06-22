@@ -146,6 +146,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [showDrive, setShowDrive] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const driveBtnRef = useRef<HTMLButtonElement>(null);
@@ -279,7 +280,10 @@ export default function AgentChat({ className = "" }: { className?: string }) {
   };
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Llevamos al fondo el PROPIO contenedor (no scrollIntoView, que recorre los
+    // ancestros y, al dispararse varias veces seguidas, hacía "temblar" el panel).
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messagesQuery.data, send.isPending, pending]);
 
   useEffect(() => {
@@ -391,7 +395,7 @@ export default function AgentChat({ className = "" }: { className?: string }) {
       </div>
 
       {/* Transcripción */}
-      <div className="flex-1 overflow-y-auto px-4 py-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5">
         {loadingHistory ? (
           <Spinner label="Cargando…" />
         ) : showEmpty ? (
