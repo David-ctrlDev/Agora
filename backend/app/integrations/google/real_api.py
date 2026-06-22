@@ -285,3 +285,114 @@ async def send_email(access_token: str, to: list[str], subject: str, body: str) 
         )
         r.raise_for_status()
         return r.json()
+
+
+# ── Drive (escritura): documentación por proyecto ──────────────────
+_DRIVE_FILES = "https://www.googleapis.com/drive/v3/files"
+_ALL_DRIVES = {"supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}
+
+
+def _q_escape(value: str) -> str:
+    return (value or "").replace("\\", "\\\\").replace("'", "\\'")
+
+
+async def ensure_folder(access_token: str, name: str, parent_id: str | None = None) -> str:
+    """Devuelve el id de una carpeta por nombre bajo `parent_id`, creándola si no existe."""
+    safe = _q_escape(name)
+    parent = parent_id or "root"
+    q = (
+        f"name = '{safe}' and '{parent}' in parents and "
+        "mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+    )
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.get(
+            _DRIVE_FILES,
+            params={"q": q, "fields": "files(id,name)", **_ALL_DRIVES},
+            headers=_headers(access_token),
+        )
+        r.raise_for_status()
+        files = r.json().get("files", [])
+        if files:
+            return files[0]["id"]
+        meta = {"name": name, "mimeType": "application/vnd.google-apps.folder"}
+        if parent_id:
+            meta["parents"] = [parent_id]
+        r = await client.post(
+            _DRIVE_FILES,
+            params={"fields": "id", **_ALL_DRIVES},
+            json=meta,
+            headers=_headers(access_token),
+        )
+        r.raise_for_status()
+        return r.json()["id"]
+
+
+async def share_file(access_token: str, file_id: str, email: str, role: str = "writer") -> None:
+    """Comparte un archivo/carpeta con una persona (sin correo de notificación)."""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.post(
+            f"{_DRIVE_FILES}/{file_id}/permissions",
+            params={"sendNotificationEmail": "false", **_ALL_DRIVES},
+            json={"type": "user", "role": role, "emailAddress": email},
+            headers=_headers(access_token),
+        )
+        r.raise_for_status()
+
+
+async def upload_file(
+    access_token: str, folder_id: str, name: str, mime_type: str, data: bytes
+) -> dict:
+    """Sube un archivo a una carpeta (multipart). Devuelve id, md5Checksum y modifiedTime."""
+    import json as _json
+
+    boundary = "agora" + uuid.uuid4().hex
+    meta = {"name": name, "parents": [folder_id]}
+    body = (
+        f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode()
+        + _json.dumps(meta).encode()
+        + f"\r\n--{boundary}\r\nContent-Type: {mime_type or 'application/octet-stream'}\r\n\r\n".encode()
+        + data
+        + f"\r\n--{boundary}--".encode()
+    )
+    headers = {
+        **_headers(access_token),
+        "Content-Type": f"multipart/related; boundary={boundary}",
+    }
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.post(
+            "https://www.googleapis.com/upload/drive/v3/files",
+            params={"uploadType": "multipart", "fields": "id,md5Checksum,modifiedTime", **_ALL_DRIVES},
+            content=body,
+            headers=headers,
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+async def list_folder_files(access_token: str, folder_id: str) -> list[dict]:
+    """Lista los archivos (no carpetas) de una carpeta, con datos para detectar cambios."""
+    q = f"'{folder_id}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.get(
+            _DRIVE_FILES,
+            params={
+                "q": q,
+                "fields": "files(id,name,mimeType,modifiedTime,md5Checksum)",
+                "pageSize": 200,
+                **_ALL_DRIVES,
+            },
+            headers=_headers(access_token),
+        )
+        r.raise_for_status()
+        return r.json().get("files", [])
+
+
+async def delete_file(access_token: str, file_id: str) -> None:
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        r = await client.delete(
+            f"{_DRIVE_FILES}/{file_id}",
+            params={**_ALL_DRIVES},
+            headers=_headers(access_token),
+        )
+        if r.status_code not in (200, 204, 404):
+            r.raise_for_status()

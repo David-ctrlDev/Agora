@@ -114,6 +114,14 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
     from app.services import github as github_svc
 
     await github_svc.ensure_repo_for_project(db, project)
+    # Si el creador tiene Drive conectado (y la feature activa), crea de una la carpeta
+    # `Ágora / {Proyecto}` en su Drive y la comparte con los miembros. Best-effort.
+    try:
+        from app.services import drive_docs
+
+        await drive_docs.ensure_project_folder(db, project)
+    except Exception:
+        pass
     return await to_read(db, project)
 
 

@@ -38,8 +38,16 @@ class Settings(BaseSettings):
         "https://www.googleapis.com/auth/calendar.events "
         "https://www.googleapis.com/auth/calendar.freebusy "
         "https://www.googleapis.com/auth/drive.readonly "
+        # Escritura sobre archivos/carpetas creados por la app (documentación por proyecto en Drive).
+        "https://www.googleapis.com/auth/drive.file "
         "https://www.googleapis.com/auth/gmail.send"
     )
+    # Documentación en Drive como "filesystem" del proyecto (carpeta + sync/re-vectorizado).
+    drive_docs_enabled: bool = False
+    # Cuenta operadora (Workspace) cuyo token usa el job de sync sin usuario presente.
+    drive_docs_operator_email: str = ""
+    # Carpeta raíz (o Unidad compartida) donde se crean las carpetas de proyecto; vacío => raíz del operador.
+    drive_docs_root_id: str = ""
     gemini_provider: str = "mock"
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-flash-latest"

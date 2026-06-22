@@ -55,6 +55,8 @@ class Project(Base):
     people_impacted: Mapped[int | None] = mapped_column(Integer, nullable=True)
     risk_reduction: Mapped[str | None] = mapped_column(String(20), nullable=True)
     strategic_value: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Carpeta de Drive que actúa como repositorio/documentación del proyecto.
+    docs_folder_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
