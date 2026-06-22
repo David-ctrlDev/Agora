@@ -89,7 +89,9 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
       createMeeting(projectId, {
         title: title.trim(),
         attendees,
-        when: date ? (time ? `${date}T${time}` : date) : null,
+        // Construimos el instante en la zona local del navegador y lo enviamos como
+        // UTC (ISO con Z): así "15:00" del usuario es 15:00 SU hora, no 15:00 UTC.
+        when: date ? new Date(`${date}T${time || "15:00"}`).toISOString() : null,
       }),
     onSuccess: () => {
       invalidateDocs();

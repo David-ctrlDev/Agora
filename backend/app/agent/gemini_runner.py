@@ -106,8 +106,10 @@ _TOOLS = [types.Tool(function_declarations=_FUNCTION_DECLARATIONS)]
 
 
 def _default_when() -> str:
-    base = datetime.now(timezone.utc) + timedelta(days=1)
-    return datetime.combine(base.date(), time(15, 0), tzinfo=timezone.utc).isoformat()
+    # Mañana a las 15:00 hora LOCAL de la empresa (no UTC), para que no se desfase.
+    local_tz = timezone(timedelta(hours=settings.app_utc_offset_hours))
+    base = datetime.now(local_tz) + timedelta(days=1)
+    return datetime.combine(base.date(), time(15, 0), tzinfo=local_tz).isoformat()
 
 
 def _normalize_tasks(raw: Any) -> list[dict[str, Any]]:

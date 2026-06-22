@@ -42,6 +42,9 @@ class Settings(BaseSettings):
         "https://www.googleapis.com/auth/drive.file "
         "https://www.googleapis.com/auth/gmail.send"
     )
+    # Zona horaria local de la empresa (Colombia, sin DST). Las horas sin zona
+    # (p. ej. de un formulario) y los valores por defecto se interpretan aquí.
+    app_utc_offset_hours: int = -5
     # Documentación en Drive como "filesystem" del proyecto (carpeta + sync/re-vectorizado).
     drive_docs_enabled: bool = False
     # Cuenta operadora (Workspace) cuyo token usa el job de sync sin usuario presente.

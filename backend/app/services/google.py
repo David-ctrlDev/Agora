@@ -201,17 +201,19 @@ async def create_meeting(
     attendees: list[str],
     when: str | None,
 ) -> dict[str, object]:
+    local_tz = timezone(timedelta(hours=settings.app_utc_offset_hours))
     if when:
         try:
-            starts_at = datetime.fromisoformat(when)
+            starts_at = datetime.fromisoformat(when.replace("Z", "+00:00"))
         except ValueError:
-            starts_at = datetime.now(timezone.utc) + timedelta(days=1)
+            starts_at = datetime.now(local_tz) + timedelta(days=1)
         if starts_at.tzinfo is None:
+            # Hora sin zona (p. ej. de un formulario) = hora LOCAL de la empresa, no UTC.
             if starts_at.hour == 0 and starts_at.minute == 0:
                 starts_at = starts_at.replace(hour=15)
-            starts_at = starts_at.replace(tzinfo=timezone.utc)
+            starts_at = starts_at.replace(tzinfo=local_tz)
     else:
-        starts_at = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+        starts_at = (datetime.now(local_tz) + timedelta(days=1)).replace(
             hour=15, minute=0, second=0, microsecond=0
         )
     end = starts_at + timedelta(hours=1)
