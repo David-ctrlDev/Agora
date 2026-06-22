@@ -10,6 +10,26 @@ from app.rag.chunking import chunk_text
 from app.rag.embeddings import get_embedding_provider
 
 
+async def _index_chunks(db: AsyncSession, document_id: int, content: str) -> None:
+    """Trocea, embebe e inserta los chunks fila a fila.
+
+    El flush por chunk fuerza inserts de una sola fila: el insert masivo
+    (insertmanyvalues) no aplica el conversor de pgvector y asyncpg recibe la
+    lista cruda del embedding ("expected str, got list").
+    """
+    provider = get_embedding_provider()
+    for index, chunk in enumerate(chunk_text(content)):
+        db.add(
+            DocumentChunk(
+                document_id=document_id,
+                chunk_index=index,
+                content=chunk,
+                embedding=provider.embed(chunk),
+            )
+        )
+        await db.flush()
+
+
 async def ingest_document(
     db: AsyncSession,
     project_id: int,
@@ -31,16 +51,7 @@ async def ingest_document(
     )
     db.add(document)
     await db.flush()
-    provider = get_embedding_provider()
-    for index, chunk in enumerate(chunk_text(content)):
-        db.add(
-            DocumentChunk(
-                document_id=document.id,
-                chunk_index=index,
-                content=chunk,
-                embedding=provider.embed(chunk),
-            )
-        )
+    await _index_chunks(db, document.id, content)
     await db.commit()
     await db.refresh(document)
     return document
@@ -124,16 +135,7 @@ async def add_version(
     document.content_text = new_content
     document.file_data = file_data
     await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
-    provider = get_embedding_provider()
-    for index, chunk in enumerate(chunk_text(new_content)):
-        db.add(
-            DocumentChunk(
-                document_id=document.id,
-                chunk_index=index,
-                content=chunk,
-                embedding=provider.embed(chunk),
-            )
-        )
+    await _index_chunks(db, document.id, new_content)
     await db.commit()
     await db.refresh(document)
     return document
