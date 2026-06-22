@@ -11,6 +11,7 @@ from app.models.github_event import GitHubEvent
 from app.models.github_repo import GitHubRepo
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.sprint import Sprint
 from app.models.task import Task
 from app.models.user import User
 
@@ -238,3 +239,127 @@ async def tasks_by_assignee(db: AsyncSession, user: User, person: str, limit: in
         )
     ).all()
     return {"found": True, "person": target.name, "tasks": [_task_row(t, pn) for (t, pn) in rows]}
+
+
+async def project_details(db: AsyncSession, user: User, project_name: str) -> dict[str, Any] | None:
+    """Ficha completa de un proyecto: estado, líder, avance, fechas, economía/ROI y sprints."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return None
+    rows = (
+        await db.execute(
+            select(Project, Area.name, User.name)
+            .join(Area, Area.id == Project.area_id)
+            .join(User, User.id == Project.owner_id, isouter=True)
+            .where(Project.id.in_(pids))
+            .order_by(func.length(Project.name).desc())
+        )
+    ).all()
+    who = (project_name or "").strip().lower()
+    match = next(((p, an, on) for (p, an, on) in rows if who and who in p.name.lower()), None)
+    if match is None:
+        return None
+    project, area_name, owner_name = match
+    from app.services import economics as economics_service
+
+    ec = economics_service.compute(project)
+    today = date.today()
+    sprints = (
+        await db.execute(select(func.count(Sprint.id)).where(Sprint.project_id == project.id))
+    ).scalar() or 0
+    return {
+        "name": project.name,
+        "area": area_name,
+        "lead": owner_name,
+        "status": project.status,
+        "progress": project.progress,
+        "category": project.category,
+        "criticality": project.criticality,
+        "start_date": project.start_date.isoformat() if project.start_date else None,
+        "due_date": project.due_date.isoformat() if project.due_date else None,
+        "due_in_days": (project.due_date - today).days if project.due_date else None,
+        "open_tasks": await _count(db, Task.project_id == project.id, Task.status != "done"),
+        "overdue": await _count(
+            db,
+            Task.project_id == project.id,
+            Task.status != "done",
+            Task.due_date.is_not(None),
+            Task.due_date < today,
+        ),
+        "done_tasks": await _count(db, Task.project_id == project.id, Task.status == "done"),
+        "sprints": int(sprints),
+        "economics": {
+            "currency": ec.currency,
+            "has_data": ec.has_data,
+            "estimated_cost": ec.estimated_cost,
+            "expected_benefit": ec.expected_benefit,
+            "roi_expected_pct": ec.roi_expected_pct,
+            "roi_actual_pct": ec.roi_actual_pct,
+        },
+    }
+
+
+async def areas_overview(db: AsyncSession, user: User) -> dict[str, Any]:
+    """Panorama por área (proyectos, % de avance, en riesgo) y totales globales accesibles."""
+    from app.services import analytics as analytics_service
+
+    ov = await analytics_service.overview(db, user)
+    return {
+        "totals": ov.totals.model_dump(),
+        "by_area": [
+            {
+                "area": a.area,
+                "projects": a.projects,
+                "completion_pct": a.completion_pct,
+                "at_risk": a.at_risk,
+            }
+            for a in ov.by_area
+        ],
+    }
+
+
+async def upcoming_deliveries(db: AsyncSession, user: User, limit: int = 10) -> list[dict[str, Any]]:
+    """Próximas entregas: proyectos no terminados con fecha de entrega, de la más cercana en adelante."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return []
+    today = date.today()
+    rows = (
+        await db.execute(
+            select(Project.name, Project.due_date, Project.status, Project.progress)
+            .where(
+                Project.id.in_(pids),
+                Project.due_date.is_not(None),
+                Project.status != "done",
+            )
+            .order_by(Project.due_date)
+            .limit(limit)
+        )
+    ).all()
+    return [
+        {
+            "project": name,
+            "due_date": due.isoformat(),
+            "in_days": (due - today).days,
+            "status": st,
+            "progress": pr,
+        }
+        for (name, due, st, pr) in rows
+    ]
+
+
+async def my_notifications(db: AsyncSession, user: User, limit: int = 10) -> list[dict[str, Any]]:
+    """Alertas/notificaciones sin leer del usuario (riesgos detectados, resúmenes)."""
+    from app.services import notifications as notif_service
+
+    rows = await notif_service.list_notifications(db, user, limit=50)
+    unread = [n for n in rows if n.status == "unread"][:limit]
+    return [
+        {
+            "title": n.title,
+            "body": n.body,
+            "severity": n.severity,
+            "when": n.created_at.date().isoformat() if n.created_at else None,
+        }
+        for n in unread
+    ]

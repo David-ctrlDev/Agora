@@ -289,23 +289,47 @@ async def browse_drive(
     ]
 
 
-async def import_drive_documents(db: AsyncSession, project_id: int, items: list[dict]) -> int:
-    """Vincula al proyecto los archivos de Drive que el usuario eligió en el explorador."""
+async def import_drive_documents(
+    db: AsyncSession, user: User, project_id: int, items: list[dict]
+) -> dict[str, int]:
+    """Vincula los archivos de Drive elegidos e indexa su contenido en el RAG.
+
+    Cada archivo queda como enlace (panel de Google) y, si su contenido es texto
+    extraíble, también se trocea/embebe para que el agente pueda buscarlo y citarlo.
+    """
+    from app.models.document import Document
+    from app.services import knowledge as knowledge_service
+
+    access = await get_access_token(db, user) if settings.google_provider == "real" else None
+    existing = set(
+        (await db.execute(select(Document.title).where(Document.project_id == project_id)))
+        .scalars()
+        .all()
+    )
     new = 0
+    indexed = 0
     for it in items:
+        title = it.get("title") or "(sin nombre)"
         if await _upsert_doc(
-            db,
-            project_id,
-            "drive",
-            it["external_id"],
-            it.get("title") or "(sin nombre)",
-            it.get("mime_type"),
-            it.get("web_url"),
-            _parse_dt(it.get("modified_at")),
+            db, project_id, "drive", it["external_id"], title,
+            it.get("mime_type"), it.get("web_url"), _parse_dt(it.get("modified_at")),
         ):
             new += 1
+        if access and title not in existing:
+            try:
+                name, mime, data = await real_api.fetch_drive_file_content(access, it["external_id"])
+                text = extract_text(name, mime, data)
+                if text.strip():
+                    await knowledge_service.ingest_document(
+                        db, project_id, title, text, source="drive", file_name=name, mime_type=mime
+                    )
+                    existing.add(title)
+                    indexed += 1
+            except Exception:
+                # Binarios no extraíbles (p. ej. .pbix) u otros errores: solo queda el enlace.
+                pass
     await db.commit()
-    return new
+    return {"new_documents": new, "indexed": indexed}
 
 
 async def read_drive_file(db: AsyncSession, user: User, file_id: str) -> tuple[str, str]:

@@ -51,7 +51,10 @@ export const browseDrive = (folderId?: string | null, q?: string, shared?: boole
 };
 
 export const importDriveFiles = (projectId: number, files: DriveEntry[]) =>
-  api.post<{ new_documents: number }>(`/api/projects/${projectId}/google/import`, { files });
+  api.post<{ new_documents: number; indexed: number }>(
+    `/api/projects/${projectId}/google/import`,
+    { files },
+  );
 
 export interface MeetingResult {
   title: string;

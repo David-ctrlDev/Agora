@@ -103,10 +103,9 @@ async def import_drive(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     project = await _project(project_id, user, db, edit=True)
-    count = await svc.import_drive_documents(
-        db, project.id, [f.model_dump() for f in payload.files]
+    return await svc.import_drive_documents(
+        db, user, project.id, [f.model_dump() for f in payload.files]
     )
-    return {"new_documents": count}
 
 
 @router.get("/projects/{project_id}/google/documents", response_model=list[GoogleDocumentRead])

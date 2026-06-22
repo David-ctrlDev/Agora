@@ -173,7 +173,8 @@ export default function GooglePanel({ projectId, canEdit }: Props) {
 
           {importMut.isSuccess && importMut.data && (
             <div className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              ✅ {importMut.data.new_documents} archivo(s) vinculados al proyecto.
+              ✅ {importMut.data.new_documents} archivo(s) vinculados
+              {importMut.data.indexed > 0 && ` · ${importMut.data.indexed} indizados para el agente`}.
             </div>
           )}
 
