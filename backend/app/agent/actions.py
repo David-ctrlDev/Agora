@@ -158,18 +158,29 @@ def _parse_task_due(value: Any):
         return None
 
 
-async def _create_tasks_in(db: AsyncSession, user: User, project, items: list) -> list[str]:
-    """Crea una lista de tareas dentro de un proyecto ya resuelto. Devuelve los títulos creados."""
+async def _create_tasks_in(
+    db: AsyncSession, user: User, project, items: list
+) -> tuple[list[str], list[str]]:
+    """Crea las tareas dentro de un proyecto. Devuelve (títulos creados, responsables sin resolver).
+
+    Un responsable "sin resolver" es un nombre que el documento indicó pero que no
+    corresponde a ningún usuario de Ágora (la tarea queda sin asignar, no se cae al
+    usuario actual).
+    """
     from app.schemas.task import TaskCreate
     from app.services import tasks as tasks_svc
 
     created: list[str] = []
+    unmatched: list[str] = []
     for it in items or []:
         data = it if isinstance(it, dict) else {"title": str(it)}
         title = (data.get("title") or "").strip()
         if not title:
             continue
-        assignee_id = await _resolve_assignee(db, user, data.get("assignee"))
+        who = (data.get("assignee") or "").strip()
+        assignee_id = await _resolve_assignee(db, user, who)
+        if who and assignee_id is None and who.lower() not in _SELF_WORDS:
+            unmatched.append(who)
         task = await tasks_svc.create_task(
             db,
             project.id,
@@ -181,7 +192,10 @@ async def _create_tasks_in(db: AsyncSession, user: User, project, items: list) -
             ),
         )
         created.append(task.title)
-    return created
+    # Únicos preservando orden.
+    seen: set[str] = set()
+    unmatched = [w for w in unmatched if not (w.lower() in seen or seen.add(w.lower()))]
+    return created, unmatched
 
 
 async def execute_create_project_with_tasks(
@@ -196,13 +210,14 @@ async def execute_create_project_with_tasks(
     if not proj.get("ok"):
         return proj
     project = await db.get(Project, proj["project_id"])
-    created = await _create_tasks_in(db, user, project, params.get("tasks") or [])
+    created, unmatched = await _create_tasks_in(db, user, project, params.get("tasks") or [])
     return {
         "ok": True,
         "name": proj["name"],
         "area": proj["area"],
         "project_id": proj["project_id"],
         "tasks": created,
+        "unmatched": unmatched,
     }
 
 
@@ -233,10 +248,10 @@ async def execute_create_tasks(db: AsyncSession, user: User, params: dict[str, A
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
     if not await projects_svc.can_edit(db, user, project):
         return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
-    created = await _create_tasks_in(db, user, project, params.get("tasks") or [])
+    created, unmatched = await _create_tasks_in(db, user, project, params.get("tasks") or [])
     if not created:
         return {"ok": False, "error": "no me diste tareas válidas para crear."}
-    return {"ok": True, "project": project.name, "tasks": created}
+    return {"ok": True, "project": project.name, "tasks": created, "unmatched": unmatched}
 
 
 async def execute_save_diagram(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:

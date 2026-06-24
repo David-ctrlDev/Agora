@@ -280,11 +280,24 @@ class DevAgentLLM:
             "Pulsa «Confirmar» para crear el proyecto con todas sus tareas."
         )
 
+    def _unmatched_note(self, result: dict[str, Any]) -> str:
+        unmatched = result.get("unmatched") or []
+        if not unmatched:
+            return ""
+        return (
+            f" No encontré como usuarios de Ágora a {', '.join(unmatched)}, "
+            "así que esas tareas quedaron sin responsable; puedes asignarlas a mano o "
+            "decirme el usuario correcto."
+        )
+
     def compose_create_project_with_tasks_result(self, result: dict[str, Any]) -> str:
         if not result.get("ok"):
             return f"No pude crear el proyecto: {result.get('error', 'error desconocido')}"
         n = len(result.get("tasks", []))
-        return f"✅ Proyecto «{result['name']}» creado en {result['area']} con {n} tarea(s)."
+        return (
+            f"✅ Proyecto «{result['name']}» creado en {result['area']} con {n} tarea(s)."
+            + self._unmatched_note(result)
+        )
 
     def compose_create_tasks_proposal(self, args: dict[str, Any]) -> str:
         project = args.get("project_name") or "(proyecto no indicado)"
@@ -301,7 +314,7 @@ class DevAgentLLM:
         if not result.get("ok"):
             return f"No pude crear las tareas: {result.get('error', 'error desconocido')}"
         n = len(result.get("tasks", []))
-        return f"✅ {n} tarea(s) creada(s) en «{result['project']}»."
+        return f"✅ {n} tarea(s) creada(s) en «{result['project']}»." + self._unmatched_note(result)
 
     def compose_create_sprint_proposal(self, args: dict[str, Any]) -> str:
         lines = [
