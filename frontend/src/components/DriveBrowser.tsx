@@ -136,6 +136,19 @@ export default function DriveBrowser({
     });
 
   const selectedList = Object.values(selected);
+  const allSelected = entries.length > 0 && entries.every((e) => selected[e.external_id]);
+  const toggleAll = () =>
+    setSelected((sel) => {
+      const next = { ...sel };
+      if (allSelected) {
+        entries.forEach((e) => delete next[e.external_id]);
+      } else {
+        entries.forEach((e) => {
+          next[e.external_id] = e;
+        });
+      }
+      return next;
+    });
 
   return createPortal(
     <>
@@ -215,20 +228,55 @@ export default function DriveBrowser({
               {searching ? "Sin resultados." : "Esta carpeta está vacía."}
             </p>
           ) : (
-            <ul className="space-y-0.5">
-              {folders.map((f) => (
-                <li key={f.external_id}>
-                  <button
-                    type="button"
-                    onClick={() => enterFolder(f)}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-50"
+            <>
+              {multiSelect && (
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className="mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs font-medium text-brand-700 transition hover:bg-brand-50"
+                >
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded border ${
+                      allSelected ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300"
+                    }`}
                   >
-                    <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-                    <span className="min-w-0 flex-1 truncate text-slate-700">{f.title}</span>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-                  </button>
-                </li>
-              ))}
+                    {allSelected && <span className="text-[10px] leading-none">✓</span>}
+                  </span>
+                  {allSelected ? "Quitar todo" : "Seleccionar todo"}
+                </button>
+              )}
+              <ul className="space-y-0.5">
+              {folders.map((f) => {
+                const isSelected = !!selected[f.external_id];
+                return (
+                  <li
+                    key={f.external_id}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
+                  >
+                    {multiSelect && (
+                      <button
+                        type="button"
+                        onClick={() => toggle(f)}
+                        title="Seleccionar la carpeta entera (todos sus archivos)"
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          isSelected ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300"
+                        }`}
+                      >
+                        {isSelected && <span className="text-[10px] leading-none">✓</span>}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => enterFolder(f)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <Folder className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span className="min-w-0 flex-1 truncate text-slate-700">{f.title}</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                    </button>
+                  </li>
+                );
+              })}
               {files.map((file) => {
                 const isSelected = !!selected[file.external_id];
                 const isPending = pendingId === file.external_id;
@@ -263,7 +311,8 @@ export default function DriveBrowser({
                   </li>
                 );
               })}
-            </ul>
+              </ul>
+            </>
           )}
         </div>
 

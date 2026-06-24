@@ -291,11 +291,46 @@ async def browse_drive(
     ]
 
 
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+
+
+async def _expand_folders(access: str, items: list[dict], cap: int = 200) -> list[dict]:
+    """Aplana la selección: los archivos quedan; las carpetas se recorren (recursivo, acotado)."""
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    async def walk(folder_id: str) -> None:
+        if folder_id in seen or len(out) >= cap:
+            return
+        seen.add(folder_id)
+        try:
+            children = await real_api.browse_drive(access, folder_id, None, False)
+        except Exception:
+            return
+        for child in children:
+            if len(out) >= cap:
+                break
+            if child.get("is_folder") or child.get("mime_type") == _FOLDER_MIME:
+                await walk(child["external_id"])
+            else:
+                out.append(child)
+
+    for it in items:
+        if len(out) >= cap:
+            break
+        if it.get("mime_type") == _FOLDER_MIME or it.get("is_folder"):
+            await walk(it["external_id"])
+        else:
+            out.append(it)
+    return out
+
+
 async def import_drive_documents(
     db: AsyncSession, user: User, project_id: int, items: list[dict]
 ) -> dict[str, int]:
     """Vincula los archivos de Drive elegidos e indexa su contenido en el RAG.
 
+    Si se elige una carpeta, se importan todos sus archivos (recursivo, acotado).
     Cada archivo queda como enlace (panel de Google) y, si su contenido es texto
     extraíble, también se trocea/embebe para que el agente pueda buscarlo y citarlo.
     """
@@ -303,6 +338,8 @@ async def import_drive_documents(
     from app.services import knowledge as knowledge_service
 
     access = await get_access_token(db, user) if settings.google_provider == "real" else None
+    if access:
+        items = await _expand_folders(access, items)
     existing = set(
         (await db.execute(select(Document.title).where(Document.project_id == project_id)))
         .scalars()
