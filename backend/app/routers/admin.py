@@ -53,7 +53,12 @@ async def update_user(
     user_id: int, payload: AdminUserUpdate, db: AsyncSession = Depends(get_db)
 ) -> AdminUserRead:
     user = await _get_user(user_id, db)
-    return await admin_svc.update_user(db, user, payload)
+    try:
+        return await admin_svc.update_user(db, user, payload)
+    except admin_svc.EmailExists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Ya existe un usuario con ese correo"
+        ) from None
 
 
 @router.put("/users/{user_id}/areas", response_model=AdminUserRead)

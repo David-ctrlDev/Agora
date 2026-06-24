@@ -68,6 +68,7 @@ function UsersTab() {
 
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [eName, setEName] = useState("");
+  const [eEmail, setEEmail] = useState("");
   const [eRole, setERole] = useState("member");
   const [eActive, setEActive] = useState(true);
   const [eAreas, setEAreas] = useState<number[]>([]);
@@ -75,6 +76,7 @@ function UsersTab() {
   const openEdit = (u: AdminUser) => {
     setEditUser(u);
     setEName(u.name);
+    setEEmail(u.email);
     setERole(u.role);
     setEActive(u.is_active);
     setEAreas(u.areas.map((a) => a.area_id));
@@ -93,7 +95,12 @@ function UsersTab() {
   });
   const saveUser = useMutation({
     mutationFn: async () => {
-      await updateAdminUser(editUser!.id, { name: eName.trim(), role: eRole, is_active: eActive });
+      await updateAdminUser(editUser!.id, {
+        name: eName.trim(),
+        email: eEmail.trim(),
+        role: eRole,
+        is_active: eActive,
+      });
       return setUserAreas(editUser!.id, eAreas.map((area_id) => ({ area_id, area_role: "member" })));
     },
     onSuccess: () => {
@@ -227,6 +234,13 @@ function UsersTab() {
       <Modal open={editUser !== null} onClose={() => setEditUser(null)} title={`Editar ${editUser?.email ?? ""}`}>
         <div className="space-y-4">
           <Input label="Nombre" value={eName} onChange={(e) => setEName(e.target.value)} />
+          <Input
+            label="Correo"
+            type="email"
+            value={eEmail}
+            onChange={(e) => setEEmail(e.target.value)}
+            placeholder="persona@invesa.com"
+          />
           <div className="grid grid-cols-2 gap-3">
             <Select label="Rol" value={eRole} onChange={(e) => setERole(e.target.value)}>
               <option value="member">Miembro</option>
@@ -271,9 +285,18 @@ function UsersTab() {
               </button>
             </div>
           )}
+          {saveUser.isError && (
+            <p className="text-sm text-rose-600">
+              {(saveUser.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+                "No se pudieron guardar los cambios."}
+            </p>
+          )}
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
             <Button variant="secondary" onClick={() => setEditUser(null)}>Cancelar</Button>
-            <Button onClick={() => saveUser.mutate()} disabled={!eName.trim() || saveUser.isPending}>
+            <Button
+              onClick={() => saveUser.mutate()}
+              disabled={!eName.trim() || !eEmail.trim() || saveUser.isPending}
+            >
               {saveUser.isPending ? "Guardando…" : "Guardar cambios"}
             </Button>
           </div>

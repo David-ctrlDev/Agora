@@ -47,7 +47,7 @@ export const createAdminUser = (payload: {
 }) => api.post<AdminUser>("/api/admin/users", payload);
 export const updateAdminUser = (
   id: number,
-  payload: { name?: string; role?: string; is_active?: boolean },
+  payload: { name?: string; email?: string; role?: string; is_active?: boolean },
 ) => api.patch<AdminUser>(`/api/admin/users/${id}`, payload);
 export const setUserAreas = (
   id: number,

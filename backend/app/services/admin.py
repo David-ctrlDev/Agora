@@ -109,6 +109,15 @@ async def create_user(db: AsyncSession, payload: AdminUserCreate) -> AdminUserRe
 async def update_user(db: AsyncSession, user: User, payload: AdminUserUpdate) -> AdminUserRead:
     if payload.name is not None:
         user.name = payload.name.strip()
+    if payload.email is not None:
+        email = payload.email.strip().lower()
+        if email != user.email:
+            taken = (
+                await db.execute(select(User).where(User.email == email, User.id != user.id))
+            ).scalar_one_or_none()
+            if taken is not None:
+                raise EmailExists()
+            user.email = email
     if payload.role in _ROLES:
         user.role = payload.role
     if payload.is_active is not None:
