@@ -36,13 +36,16 @@ def _system(user: User) -> str:
         "reuniones tengo» (hoy, esta semana, este mes) usa my_meetings con el parámetro days "
         "adecuado (1, 7 o 30); si devuelve connected=false, dile que conecte su cuenta de Google. "
         "Para agendar una reunión de un proyecto «cuando todos coincidan» o «que respete la "
-        "disponibilidad», llama PRIMERO a find_meeting_slot(project_name): mira el free/busy de todos "
-        "los miembros y devuelve el primer hueco común (start, end, attendees) en horario laboral "
-        "evitando el almuerzo. Si found=true, llama enseguida a create_meeting pasando ese start como "
-        "when, esos attendees, el mismo duration_minutes y el project_name; no inventes el horario ni "
-        "preguntes la hora. Si te piden una duración concreta (p. ej. «de 1 hora», «media hora», «2 "
-        "horas»), pásala como duration_minutes a find_meeting_slot y a create_meeting. Si found=false, explícale "
-        "el motivo (sin Google, sin miembros, o sin hueco) y ofrece ampliar el plazo. "
+        "disponibilidad», usa SIEMPRE schedule_meeting(project_name, duration_minutes): el servidor "
+        "calcula el PRIMER hueco común (free/busy de todos los miembros, en horario laboral evitando "
+        "el almuerzo) y toma como asistentes a los MIEMBROS REALES del proyecto, y te devuelve la "
+        "reunión lista para confirmar. NUNCA inventes ni reescribas la hora o los asistentes, ni uses "
+        "create_meeting para esto. Si te piden una duración concreta («de 1 hora», «media hora», «2 "
+        "horas»), pásala como duration_minutes. El hueco que devuelve YA es el más temprano posible: "
+        "si el usuario pregunta «¿es el primero disponible?», respóndele que sí y explícalo (no vuelvas "
+        "a proponer otra hora distinta). Si no hay hueco, di el motivo y ofrece ampliar el plazo "
+        "(days_ahead). Usa find_meeting_slot solo para CONSULTAR disponibilidad sin crear nada; usa "
+        "create_meeting solo para reuniones con hora y asistentes EXPLÍCITOS que indique el usuario. "
         "Si preguntan por «mis tareas» o «qué "
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
         "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
@@ -112,6 +115,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "create_project_with_tasks", "description": "Crea un proyecto Y su listado completo de tareas en UNA sola confirmación. Úsala siempre que el usuario pida «crea un proyecto y sus tareas», un cronograma o un plan de trabajo, especialmente a partir de un acta o documento adjunto: extrae un nombre de proyecto y TODAS las tareas accionables de una vez (no las crees una por una).", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["name", "tasks"]}},
     {"name": "create_tasks", "description": "Crea VARIAS tareas a la vez (lote) en un proyecto que YA existe. Úsala cuando el usuario pida añadir un listado/cronograma de tareas a un proyecto existente (no las crees una por una).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["tasks"]}},
     {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados. Para reuniones de un proyecto «cuando todos estén libres», llama antes a find_meeting_slot y pasa aquí su start como when, sus attendees y el mismo duration_minutes.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}, "description": "Correos de los invitados."}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (idealmente el start que devuelve find_meeting_slot, con zona horaria)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "project_name": {"type": "string", "description": "Proyecto al que pertenece la reunión, para enlazarla (opcional)."}}, "required": ["title"]}},
+    {"name": "schedule_meeting", "description": "Agenda una reunión de un proyecto EN EL PRIMER HUECO COMÚN de todos sus miembros (el servidor calcula el horario con free/busy y usa como asistentes a los miembros reales del proyecto). Úsala para «reúnenos cuando todos coincidan / respetando la disponibilidad». Es determinista: no inventes ni pases tú la hora ni los asistentes; solo el proyecto, la duración y, si quieres, el título. Devuelve la reunión lista para confirmar.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string", "description": "Título de la reunión (opcional)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "days_ahead": {"type": "integer", "description": "Días hacia adelante a explorar (por defecto 7)."}}, "required": ["project_name"]}},
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
     {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
@@ -293,6 +297,34 @@ async def run_turn(
         call = calls[0]
         name = call.name
         args = dict(call.args or {})
+        if name == "schedule_meeting":
+            # Agendamiento AUTORITATIVO del servidor: hora y asistentes deterministas
+            # (el agente no los provee, así no puede corromperlos).
+            slot = await tools.find_meeting_slot(
+                db,
+                user,
+                args.get("project_name", ""),
+                duration_minutes=int(args.get("duration_minutes") or 60),
+                days_ahead=int(args.get("days_ahead") or 7),
+            )
+            if not slot.get("found"):
+                contents.append(candidate.content)
+                contents.append(
+                    types.Content(
+                        role="tool",
+                        parts=[types.Part.from_function_response(name=name, response={"result": slot})],
+                    )
+                )
+                continue
+            project_label = slot.get("project") or "proyecto"
+            params = {
+                "title": (args.get("title") or "").strip() or f"Seguimiento: {project_label}",
+                "attendees": slot.get("attendees") or [],
+                "when": slot["start"],
+                "duration_minutes": int(slot.get("duration_minutes") or 60),
+                "project_name": slot.get("project"),
+            }
+            return _proposal_text("create_meeting", params), {"type": "create_meeting", "params": params}
         if name in _ACTION_TOOLS:
             params = _map_params(name, args)
             return _proposal_text(name, params), {"type": name, "params": params}
