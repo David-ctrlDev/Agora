@@ -6,6 +6,7 @@ import {
   TASK_PRIORITY,
   TASK_STATUS,
   TASK_STATUS_ORDER,
+  type Task,
   type TaskCreate,
   type TaskPriority,
   type TaskStatus,
@@ -35,6 +36,8 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
   const [assigneeId, setAssigneeId] = useState<number | "">("");
   const [dueDate, setDueDate] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [overCol, setOverCol] = useState<TaskStatus | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
   const create = useMutation({
@@ -50,7 +53,19 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
   });
   const update = useMutation({
     mutationFn: ({ id, status }: { id: number; status: TaskStatus }) => updateTask(id, { status }),
-    onSuccess: invalidate,
+    // Movimiento optimista: la tarjeta salta de columna al instante (clave para el drag&drop).
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<Task[]>(queryKey);
+      queryClient.setQueryData<Task[]>(queryKey, (old) =>
+        old?.map((t) => (t.id === id ? { ...t, status } : t)),
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+    },
+    onSettled: () => invalidate(),
   });
   const remove = useMutation({ mutationFn: (id: number) => deleteTask(id), onSuccess: invalidate });
 
@@ -141,14 +156,56 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
             const column = tasks.filter((t) => t.status === statusKey);
             const meta = TASK_STATUS[statusKey];
             return (
-              <div key={statusKey} className="rounded-xl bg-slate-100/70 p-3">
+              <div
+                key={statusKey}
+                onDragOver={(e) => {
+                  if (canEdit && dragId != null) {
+                    e.preventDefault();
+                    setOverCol(statusKey);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget === e.target) {
+                    setOverCol((c) => (c === statusKey ? null : c));
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = dragId ?? Number(e.dataTransfer.getData("text/plain"));
+                  setOverCol(null);
+                  setDragId(null);
+                  if (id && tasks.find((t) => t.id === id)?.status !== statusKey) {
+                    update.mutate({ id, status: statusKey });
+                  }
+                }}
+                className={`rounded-xl p-3 transition ${
+                  overCol === statusKey
+                    ? "bg-brand-50 ring-2 ring-brand-300"
+                    : "bg-slate-100/70"
+                }`}
+              >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <span className="text-sm font-semibold text-slate-700">{meta.label}</span>
                   <span className="text-xs text-slate-400">{column.length}</span>
                 </div>
                 <div className="space-y-2">
                   {column.map((t) => (
-                    <Card key={t.id} className="p-3">
+                    <Card
+                      key={t.id}
+                      draggable={canEdit}
+                      onDragStart={(e) => {
+                        setDragId(t.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", String(t.id));
+                      }}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setOverCol(null);
+                      }}
+                      className={`p-3 ${canEdit ? "cursor-grab active:cursor-grabbing" : ""} ${
+                        dragId === t.id ? "opacity-50" : ""
+                      }`}
+                    >
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <button
                           type="button"
