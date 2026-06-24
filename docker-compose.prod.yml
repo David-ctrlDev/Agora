@@ -1,0 +1,43 @@
+# ============================================================
+# Overrides de PRODUCCIÓN. Se combinan con el base:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Diferencias clave vs. desarrollo:
+#   - Imágenes con target `runtime` (sin hot-reload, sin código montado).
+#   - El frontend (nginx) es el único expuesto (puerto 80) y proxya /api → backend.
+#   - Postgres y backend NO publican puertos al host (solo red interna).
+#   - ENV=production y SEED_ON_START=false (no se siembran datos de ejemplo).
+#   - Requiere Docker Compose >= 2.24 (por `!reset`).
+# ============================================================
+name: agora
+
+services:
+  db:
+    container_name: agora_postgres   # nombre fijo para pg_dump en el deploy
+    restart: always
+    ports: !reset []                 # no exponer Postgres fuera del host
+
+  backend:
+    build:
+      target: runtime
+    image: agora-backend:latest
+    restart: always
+    # El entrypoint aplica migraciones; en prod NO siembra (ENV=production).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    volumes: !reset []               # sin bind-mount del código: usa el de la imagen
+    environment:
+      ENV: production
+      SEED_ON_START: "false"
+    ports: !reset []                 # el backend se sirve vía nginx (/api)
+
+  frontend:
+    build:
+      target: runtime
+    image: agora-frontend:latest
+    restart: always
+    volumes: !reset []
+    environment: !reset {}           # nginx no usa el proxy de Vite
+    ports: !override                 # reemplaza (no fusiona) el 5173 de dev por el 80
+      - "80:80"
+    depends_on:
+      - backend
