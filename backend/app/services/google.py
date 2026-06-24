@@ -196,10 +196,11 @@ async def sync_project(db: AsyncSession, user: User, project_id: int, project_na
 async def create_meeting(
     db: AsyncSession,
     user: User,
-    project_id: int,
+    project_id: int | None,
     title: str,
     attendees: list[str],
     when: str | None,
+    duration_minutes: int = 60,
 ) -> dict[str, object]:
     local_tz = timezone(timedelta(hours=settings.app_utc_offset_hours))
     if when:
@@ -216,7 +217,7 @@ async def create_meeting(
         starts_at = (datetime.now(local_tz) + timedelta(days=1)).replace(
             hour=15, minute=0, second=0, microsecond=0
         )
-    end = starts_at + timedelta(hours=1)
+    end = starts_at + timedelta(minutes=max(15, min(int(duration_minutes or 60), 480)))
     clean_attendees = [a.strip() for a in attendees if a.strip()]
 
     if settings.google_provider == "real":
@@ -226,29 +227,33 @@ async def create_meeting(
         event = await real_api.create_meeting(
             access, title.strip(), clean_attendees, starts_at.isoformat(), end.isoformat()
         )
-        await _upsert_doc(
-            db, project_id, "calendar", event.get("external_id") or event["title"],
-            event["title"], "event", event.get("web_url"), starts_at,
-        )
+        if project_id is not None:
+            await _upsert_doc(
+                db, project_id, "calendar", event.get("external_id") or event["title"],
+                event["title"], "event", event.get("web_url"), starts_at,
+            )
         await db.commit()
         return {
             "title": event["title"],
             "meet_url": event.get("meet_url"),
             "web_url": event.get("web_url"),
             "starts_at": starts_at,
+            "ends_at": end,
         }
 
     provider = get_google_provider()
     event = provider.create_meeting(title.strip(), clean_attendees, starts_at)
-    await _upsert_doc(
-        db, project_id, "calendar", event.external_id, event.title, "event", event.web_url, event.starts_at
-    )
+    if project_id is not None:
+        await _upsert_doc(
+            db, project_id, "calendar", event.external_id, event.title, "event", event.web_url, event.starts_at
+        )
     await db.commit()
     return {
         "title": event.title,
         "meet_url": event.meet_url,
         "web_url": event.web_url,
         "starts_at": event.starts_at,
+        "ends_at": end,
     }
 
 

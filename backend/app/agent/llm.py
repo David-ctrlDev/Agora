@@ -13,6 +13,24 @@ EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _CREATE_VERBS = ["crea", "crear", "añade", "anade", "agrega", "registra", "agenda", "programa", "organiza"]
 
 
+def _duration_label(minutes: int) -> str:
+    minutes = int(minutes or 60)
+    if minutes < 60:
+        return f"{minutes} min"
+    horas, resto = divmod(minutes, 60)
+    return f"{horas} h" + (f" {resto} min" if resto else "")
+
+
+def _fmt_when(when_iso: str | None, duration_minutes: int = 60) -> str:
+    """«29/06 11:00–12:00 (1 h)» a partir de un ISO de inicio y la duración."""
+    try:
+        start = datetime.fromisoformat((when_iso or "").replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return when_iso or "(por definir)"
+    end = start + timedelta(minutes=int(duration_minutes or 60))
+    return f"{start.strftime('%d/%m %H:%M')}–{end.strftime('%H:%M')} ({_duration_label(duration_minutes)})"
+
+
 @dataclass
 class Decision:
     intent: str
@@ -216,7 +234,7 @@ class DevAgentLLM:
 
     def compose_meeting_proposal(self, args: dict[str, Any]) -> str:
         attendees = ", ".join(args["attendees"]) if args["attendees"] else "(sin asistentes)"
-        when = args["when"].replace("T", " ").replace("+00:00", " UTC")
+        when = _fmt_when(args.get("when"), args.get("duration_minutes") or 60)
         return (
             "Voy a crear esta reunión (requiere tu confirmación):\n"
             f"• Título: {args['title']}\n• Asistentes: {attendees}\n• Cuándo: {when}\n"
@@ -351,7 +369,10 @@ class DevAgentLLM:
         return f"✅ Diagrama «{result['title']}» guardado en la documentación de «{result['project']}»."
 
     def compose_meeting_result(self, result: dict[str, Any]) -> str:
-        return f"✅ Reunión creada: «{result['title']}». Enlace de Meet: {result['meet_url']}"
+        when = _fmt_when(result.get("starts_at"), result.get("duration_minutes") or 60)
+        meet = result.get("meet_url")
+        meet_line = f" Enlace de Meet: {meet}" if meet else ""
+        return f"✅ Reunión creada: «{result['title']}» — {when}.{meet_line}"
 
     def compose_email_result(self, result: dict[str, Any]) -> str:
         to = ", ".join(result.get("to", [])) or "(sin destinatario)"

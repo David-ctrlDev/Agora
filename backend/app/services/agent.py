@@ -319,7 +319,8 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
     if action.status != "pending":
         raise ActionNotPending()
     if action.action_type == "create_meeting":
-        result = actions.execute_create_meeting(action.params)
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_meeting(db, user, action.params)
         text = _llm.compose_meeting_result(result)
     elif action.action_type == "send_email":
         result = actions.execute_send_email(action.params)

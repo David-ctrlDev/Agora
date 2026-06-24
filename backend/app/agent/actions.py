@@ -1,10 +1,12 @@
 """Ejecución de acciones del agente (con efecto externo). Solo tras confirmación."""
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.integrations.google.factory import get_google_provider
 from app.models.user import User
 
@@ -15,17 +17,63 @@ def _norm(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c)).strip()
 
 
-def execute_create_meeting(params: dict[str, Any]) -> dict[str, Any]:
-    provider = get_google_provider()
+async def _resolve_project_id(db: AsyncSession, user: User, project_name: str | None) -> int | None:
+    """Liga la reunión a un proyecto accesible si el nombre coincide; si no, None."""
+    if not (project_name or "").strip():
+        return None
+    from app.agent.tools import _accessible_project_ids
+    from app.models.project import Project
+
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return None
+    rows = (
+        await db.execute(
+            select(Project.id, Project.name)
+            .where(Project.id.in_(pids))
+            .order_by(func.length(Project.name).desc())
+        )
+    ).all()
+    who = project_name.strip().lower()
+    match = next((pid for pid, name in rows if who in (name or "").lower()), None)
+    return match
+
+
+async def execute_create_meeting(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    title = params.get("title", "Reunión")
+    attendees = params.get("attendees", [])
     when_raw = params.get("when")
+    duration = int(params.get("duration_minutes") or 60)
+
+    if settings.google_provider == "real":
+        # Crea la reunión REAL en el calendario del usuario (con su token OAuth).
+        from app.services import google as google_service
+
+        project_id = await _resolve_project_id(db, user, params.get("project_name"))
+        result = await google_service.create_meeting(
+            db, user, project_id, title, attendees, when_raw, duration
+        )
+        starts_at, ends_at = result.get("starts_at"), result.get("ends_at")
+        return {
+            "title": result["title"],
+            "attendees": attendees,
+            "starts_at": starts_at.isoformat() if hasattr(starts_at, "isoformat") else starts_at,
+            "ends_at": ends_at.isoformat() if hasattr(ends_at, "isoformat") else ends_at,
+            "duration_minutes": duration,
+            "meet_url": result.get("meet_url"),
+            "web_url": result.get("web_url"),
+        }
+
+    # Modo mock (sin red): provider determinista.
+    provider = get_google_provider()
     when = datetime.fromisoformat(when_raw) if when_raw else datetime.now(timezone.utc)
-    event = provider.create_meeting(
-        params.get("title", "Reunión"), params.get("attendees", []), when
-    )
+    event = provider.create_meeting(title, attendees, when)
     return {
         "title": event.title,
-        "attendees": params.get("attendees", []),
+        "attendees": attendees,
         "starts_at": event.starts_at.isoformat(),
+        "ends_at": (event.starts_at + timedelta(minutes=duration)).isoformat(),
+        "duration_minutes": duration,
         "meet_url": event.meet_url,
         "web_url": event.web_url,
     }

@@ -39,7 +39,9 @@ def _system(user: User) -> str:
         "disponibilidad», llama PRIMERO a find_meeting_slot(project_name): mira el free/busy de todos "
         "los miembros y devuelve el primer hueco común (start, end, attendees) en horario laboral "
         "evitando el almuerzo. Si found=true, llama enseguida a create_meeting pasando ese start como "
-        "when y esos attendees; no inventes el horario ni preguntes la hora. Si found=false, explícale "
+        "when, esos attendees, el mismo duration_minutes y el project_name; no inventes el horario ni "
+        "preguntes la hora. Si te piden una duración concreta (p. ej. «de 1 hora», «media hora», «2 "
+        "horas»), pásala como duration_minutes a find_meeting_slot y a create_meeting. Si found=false, explícale "
         "el motivo (sin Google, sin miembros, o sin hueco) y ofrece ampliar el plazo. "
         "Si preguntan por «mis tareas» o «qué "
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
@@ -109,7 +111,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "create_task", "description": "Crea UNA sola tarea dentro de un proyecto. Si vas a crear varias, usa create_tasks.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}, "assignee": {"type": "string", "description": "Nombre o correo del responsable, o 'mí' para el usuario actual."}}, "required": ["title"]}},
     {"name": "create_project_with_tasks", "description": "Crea un proyecto Y su listado completo de tareas en UNA sola confirmación. Úsala siempre que el usuario pida «crea un proyecto y sus tareas», un cronograma o un plan de trabajo, especialmente a partir de un acta o documento adjunto: extrae un nombre de proyecto y TODAS las tareas accionables de una vez (no las crees una por una).", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["name", "tasks"]}},
     {"name": "create_tasks", "description": "Crea VARIAS tareas a la vez (lote) en un proyecto que YA existe. Úsala cuando el usuario pida añadir un listado/cronograma de tareas a un proyecto existente (no las crees una por una).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["tasks"]}},
-    {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados. Para reuniones de un proyecto «cuando todos estén libres», llama antes a find_meeting_slot y pasa aquí su start como when y sus attendees.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}, "description": "Correos de los invitados."}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (idealmente el start que devuelve find_meeting_slot, con zona horaria)."}}, "required": ["title"]}},
+    {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados. Para reuniones de un proyecto «cuando todos estén libres», llama antes a find_meeting_slot y pasa aquí su start como when, sus attendees y el mismo duration_minutes.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}, "description": "Correos de los invitados."}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (idealmente el start que devuelve find_meeting_slot, con zona horaria)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "project_name": {"type": "string", "description": "Proyecto al que pertenece la reunión, para enlazarla (opcional)."}}, "required": ["title"]}},
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
     {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
@@ -172,6 +174,8 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
             "title": args.get("title", "Reunión"),
             "attendees": list(args.get("attendees") or []),
             "when": args.get("when") or _default_when(),
+            "duration_minutes": int(args.get("duration_minutes") or 60),
+            "project_name": args.get("project_name") or None,
         }
     if name == "send_email":
         return {"to": list(args.get("to") or []), "subject": args.get("subject", ""), "body": args.get("body", "")}
