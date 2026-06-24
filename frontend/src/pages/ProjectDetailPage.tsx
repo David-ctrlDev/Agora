@@ -49,10 +49,15 @@ export default function ProjectDetailPage() {
     mutationFn: (ownerId: number | null) => updateProject(projectId, { owner_id: ownerId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
   });
-  const addMemberMut = useMutation({
-    mutationFn: ({ userId, role }: { userId: number; role: string }) =>
-      addMember(projectId, userId, role),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId, "members"] }),
+  const addMembersMut = useMutation({
+    mutationFn: async ({ userIds, role }: { userIds: number[]; role: string }) => {
+      await Promise.all(userIds.map((id) => addMember(projectId, id, role)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId, "members"] });
+      setSelectedMemberIds([]);
+      setMemberSearch("");
+    },
   });
   const removeMemberMut = useMutation({
     mutationFn: (userId: number) => removeMember(projectId, userId),
@@ -63,7 +68,8 @@ export default function ProjectDetailPage() {
     onSuccess: () => navigate("/proyectos", { replace: true }),
   });
 
-  const [newMemberId, setNewMemberId] = useState<number | "">("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
   const [newMemberRole, setNewMemberRole] = useState("editor");
 
   const [plan, setPlan] = useState({ progress: "", start: "", due: "" });
@@ -115,6 +121,18 @@ export default function ProjectDetailPage() {
     );
   const memberIds = new Set(members.map((m) => m.user_id));
   const candidateUsers = (usersQuery.data ?? []).filter((u) => !memberIds.has(u.id));
+  const memberTerm = memberSearch.trim().toLowerCase();
+  const filteredCandidates = memberTerm
+    ? candidateUsers.filter(
+        (u) =>
+          u.name.toLowerCase().includes(memberTerm) ||
+          u.email.toLowerCase().includes(memberTerm),
+      )
+    : candidateUsers;
+  const toggleMember = (id: number) =>
+    setSelectedMemberIds((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    );
 
   return (
     <div className="space-y-6">
@@ -287,34 +305,70 @@ export default function ProjectDetailPage() {
           </ul>
         )}
         {isOwnerOrAdmin && candidateUsers.length > 0 && (
-          <div className="mt-4 flex items-end gap-2 border-t border-slate-100 pt-4">
-            <Select
-              label="Añadir miembro"
-              value={newMemberId}
-              onChange={(e) => setNewMemberId(e.target.value ? Number(e.target.value) : "")}
-            >
-              <option value="">Selecciona usuario</option>
-              {candidateUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </Select>
-            <Select label="Rol" value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
-              <option value="editor">editor</option>
-              <option value="viewer">viewer</option>
-            </Select>
-            <Button
-              onClick={() => {
-                if (newMemberId !== "") {
-                  addMemberMut.mutate({ userId: Number(newMemberId), role: newMemberRole });
-                  setNewMemberId("");
+          <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Añadir miembros
+            </p>
+            <Input
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder="Buscar por nombre o correo…"
+            />
+            <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200">
+              {filteredCandidates.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-slate-400">Sin resultados.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {filteredCandidates.map((u) => {
+                    const checked = selectedMemberIds.includes(u.id);
+                    return (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          onClick={() => toggleMember(u.id)}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-slate-50"
+                        >
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                              checked ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300"
+                            }`}
+                          >
+                            {checked && <span className="text-[10px] leading-none">✓</span>}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm text-slate-800">{u.name}</span>
+                            <span className="block truncate text-xs text-slate-400">{u.email}</span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="flex items-end justify-between gap-2">
+              <div className="w-40">
+                <Select
+                  label="Rol"
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value)}
+                >
+                  <option value="editor">editor</option>
+                  <option value="viewer">viewer</option>
+                </Select>
+              </div>
+              <Button
+                onClick={() =>
+                  addMembersMut.mutate({ userIds: selectedMemberIds, role: newMemberRole })
                 }
-              }}
-              disabled={newMemberId === ""}
-            >
-              <UserPlus className="h-4 w-4" /> Añadir
-            </Button>
+                disabled={selectedMemberIds.length === 0 || addMembersMut.isPending}
+              >
+                <UserPlus className="h-4 w-4" />{" "}
+                {addMembersMut.isPending
+                  ? "Añadiendo…"
+                  : `Añadir${selectedMemberIds.length ? ` (${selectedMemberIds.length})` : ""}`}
+              </Button>
+            </div>
           </div>
         )}
       </Card>
