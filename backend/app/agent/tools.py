@@ -382,7 +382,7 @@ async def find_meeting_slot(
     days_ahead: int = 7,
 ) -> dict[str, Any]:
     """Primer hueco común de los miembros del proyecto (free/busy de Calendar), en
-    horario laboral (8–18) de lunes a viernes y evitando el almuerzo (12–14).
+    horario laboral (8–17) de lunes a viernes y evitando el almuerzo (12–14).
     Devuelve el inicio sugerido y los correos de los asistentes para create_meeting."""
     pids = await _accessible_project_ids(db, user)
     if not pids:

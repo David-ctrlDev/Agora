@@ -15,8 +15,9 @@ from app.models.project_member import ProjectMember
 from app.models.user import User
 from app.services import google as google_service
 
-# Ventanas laborales locales (hora inicio/fin), excluyendo almuerzo 12–14.
-_WORK_WINDOWS = [(8, 0, 12, 0), (14, 0, 18, 0)]
+# Ventanas laborales locales (hora inicio/fin): jornada 8–17, excluyendo almuerzo 12–14.
+# (una reunión de 1 h puede empezar como muy tarde a las 16:00.)
+_WORK_WINDOWS = [(8, 0, 12, 0), (14, 0, 17, 0)]
 _STEP = timedelta(minutes=30)
 
 
@@ -101,5 +102,5 @@ async def suggest_slot(
     return {
         "found": False,
         "attendees": emails,
-        "reason": "no encontré un hueco común en horario laboral (8–18, evitando 12–14) en ese plazo.",
+        "reason": "no encontré un hueco común en horario laboral (8–17, evitando 12–14) en ese plazo.",
     }
