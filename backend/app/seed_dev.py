@@ -6,7 +6,7 @@ Idempotente: omite lo que ya existe.
 import asyncio
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.db import SessionLocal
 from app.models.area import Area
@@ -145,6 +145,19 @@ async def main() -> None:
         await db.flush()
 
         users = {u.email: u for u in (await db.execute(select(User))).scalars().all()}
+
+        # Áreas y usuarios se mantienen idempotentes (necesarios para login), pero los
+        # proyectos/tareas/documentos de EJEMPLO solo se siembran si la base está vacía
+        # de proyectos (primer arranque). En reinicios NO se vuelve a crear lo que el
+        # usuario haya borrado ni se reinician estados de tareas que haya movido.
+        project_count = await db.scalar(select(func.count(Project.id))) or 0
+        if project_count > 0:
+            await db.commit()
+            print(
+                f"[seed] {project_count} proyectos existentes; no se siembran datos de "
+                "ejemplo (no se resucita lo borrado)."
+            )
+            return
 
         for spec in DEV_PROJECTS:
             area = areas.get(spec["area"])
