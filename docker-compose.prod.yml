@@ -16,6 +16,11 @@ services:
     container_name: agora_postgres   # nombre fijo para pg_dump en el deploy
     restart: always
     ports: !reset []                 # no exponer Postgres fuera del host
+    # Datos en una RUTA DEL HOST (persistente, fuera del volumen interno de Docker;
+    # sobrevive a redeploys y puedes montar ahí almacenamiento externo/NAS).
+    # Define DATA_PATH en el .env del servidor o usa el valor por defecto.
+    volumes: !override
+      - ${DATA_PATH:-/srv/agora/data}:/var/lib/postgresql/data
 
   backend:
     build:

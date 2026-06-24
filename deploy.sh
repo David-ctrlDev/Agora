@@ -6,6 +6,7 @@
 #   ./deploy.sh                Build + ship + restart, with auto-rollback
 #   ./deploy.sh --skip-build   Reuse existing local images (no docker compose build)
 #   ./deploy.sh --rollback     Restore previous release on the server
+#   ./deploy.sh --migrate-data Push CURRENT local DB into prod (one-time, overwrites prod DB)
 #   ./deploy.sh --help         Show help
 #
 # Run from Git Bash. Will prompt for SSH password a few times during deploy
@@ -43,10 +44,12 @@ die()  { err "$*"; exit 1; }
 # ─── Args ───
 ROLLBACK=false
 SKIP_BUILD=false
+MIGRATE_DATA=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --rollback)   ROLLBACK=true;   shift ;;
-    --skip-build) SKIP_BUILD=true; shift ;;
+    --rollback)     ROLLBACK=true;     shift ;;
+    --skip-build)   SKIP_BUILD=true;   shift ;;
+    --migrate-data) MIGRATE_DATA=true; shift ;;
     -h|--help)
       grep -E '^# (Usage|  |Run)' "${BASH_SOURCE[0]}" | sed 's/^# //'
       exit 0 ;;
@@ -60,8 +63,12 @@ done
 TS="$(date +%Y%m%d-%H%M)"
 TAR_NAME="agora-images-${TS}.tar.gz"
 LOCAL_TAR="$(dirname "$SCRIPT_DIR")/${TAR_NAME}"   # el tar cae FUERA del repo
+LOCAL_DUMP="$(dirname "$SCRIPT_DIR")/agora-localdump-${TS}.sql.gz"
 
-cleanup() { [[ -f "$LOCAL_TAR" ]] && rm -f "$LOCAL_TAR" || true; }
+cleanup() {
+  [[ -f "$LOCAL_TAR" ]] && rm -f "$LOCAL_TAR" || true
+  [[ -f "$LOCAL_DUMP" ]] && rm -f "$LOCAL_DUMP" || true
+}
 trap cleanup EXIT
 
 # ─── SSH helpers — conexión directa por llamada ───
@@ -93,6 +100,41 @@ EOF
     sleep 2
   done
   die "NO responde tras rollback. Revisa:\n  ssh ${DEPLOY_HOST} 'cd ${DEPLOY_PATH} && docker compose ${COMPOSE_FILES[*]} logs --tail=50'"
+fi
+
+# ──────────────────────── MIGRATE DATA (una sola vez) ────────────────────────
+# Lleva los datos LOCALES actuales a producción. Ejecutar DESPUÉS del primer
+# ./deploy.sh (la base de prod debe existir). SOBREESCRIBE la base de prod.
+if $MIGRATE_DATA; then
+  [[ -d "$REPO_DIR" ]] || die "Repo no encontrado: $REPO_DIR"
+  cd "$REPO_DIR"
+  check_ssh
+  warn "Esto SOBREESCRIBE la base de PRODUCCIÓN con tus datos LOCALES actuales."
+  read -p "  Escribe MIGRAR para continuar: " -r; echo
+  [[ "$REPLY" == "MIGRAR" ]] || die "Abortado"
+
+  info "Volcando base local (${DB_NAME})..."
+  docker compose exec -T db pg_dump -U "$DB_USER" -d "$DB_NAME" --clean --if-exists --no-owner \
+    | gzip > "$LOCAL_DUMP"
+  ok "Dump local: $(du -h "$LOCAL_DUMP" | cut -f1)"
+
+  info "Subiendo dump..."
+  scp -o ConnectTimeout=15 "$LOCAL_DUMP" "${DEPLOY_HOST}:${DEPLOY_PATH}/migrate-localdump.sql.gz"
+
+  info "Respaldando prod y restaurando (backend detenido durante la carga)..."
+  remote_sh <<EOF
+set -euo pipefail
+cd "$DEPLOY_PATH"
+mkdir -p "$BACKUPS_PATH_REMOTE"
+docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" \
+  | gzip > "${BACKUPS_PATH_REMOTE}/pre-migrate_\$(date +%Y%m%d_%H%M).sql.gz" || true
+docker compose ${COMPOSE_FILES[*]} stop backend
+gunzip -c migrate-localdump.sql.gz | docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=0 -U "$DB_USER" -d "$DB_NAME" >/dev/null
+rm -f migrate-localdump.sql.gz
+docker compose ${COMPOSE_FILES[*]} up -d backend
+EOF
+  ok "Datos locales migrados a producción. (Respaldo previo en ${BACKUPS_PATH_REMOTE}/pre-migrate_*.sql.gz)"
+  exit 0
 fi
 
 # ──────────────────────── PRE-CHECKS ────────────────────────
