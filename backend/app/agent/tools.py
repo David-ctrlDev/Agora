@@ -374,6 +374,40 @@ async def upcoming_deliveries(db: AsyncSession, user: User, limit: int = 10) -> 
     ]
 
 
+async def find_meeting_slot(
+    db: AsyncSession,
+    user: User,
+    project_name: str,
+    duration_minutes: int = 60,
+    days_ahead: int = 7,
+) -> dict[str, Any]:
+    """Primer hueco común de los miembros del proyecto (free/busy de Calendar), en
+    horario laboral (8–18) de lunes a viernes y evitando el almuerzo (12–14).
+    Devuelve el inicio sugerido y los correos de los asistentes para create_meeting."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"found": False, "reason": "no tienes proyectos accesibles."}
+    rows = (
+        await db.execute(
+            select(Project)
+            .where(Project.id.in_(pids))
+            .order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    who = (project_name or "").strip().lower()
+    project = next((p for p in rows if who and who in p.name.lower()), None)
+    if project is None and len(rows) == 1:
+        project = rows[0]
+    if project is None:
+        return {"found": False, "reason": f"no identifiqué el proyecto «{project_name}»."}
+
+    from app.services import scheduling
+
+    result = await scheduling.suggest_slot(db, user, project, duration_minutes, days_ahead)
+    result["project"] = project.name
+    return result
+
+
 async def my_meetings(db: AsyncSession, user: User, days: int = 7) -> dict[str, Any]:
     """Próximas reuniones del calendario de Google del usuario (las suyas, no por proyecto)."""
     from app.services import google as google_service

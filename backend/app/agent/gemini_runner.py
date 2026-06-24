@@ -35,6 +35,12 @@ def _system(user: User) -> str:
         "importados de Drive) usa knowledge_search. Para las reuniones del usuario, su agenda o «qué "
         "reuniones tengo» (hoy, esta semana, este mes) usa my_meetings con el parámetro days "
         "adecuado (1, 7 o 30); si devuelve connected=false, dile que conecte su cuenta de Google. "
+        "Para agendar una reunión de un proyecto «cuando todos coincidan» o «que respete la "
+        "disponibilidad», llama PRIMERO a find_meeting_slot(project_name): mira el free/busy de todos "
+        "los miembros y devuelve el primer hueco común (start, end, attendees) en horario laboral "
+        "evitando el almuerzo. Si found=true, llama enseguida a create_meeting pasando ese start como "
+        "when y esos attendees; no inventes el horario ni preguntes la hora. Si found=false, explícale "
+        "el motivo (sin Google, sin miembros, o sin hueco) y ofrece ampliar el plazo. "
         "Si preguntan por «mis tareas» o «qué "
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
         "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
@@ -96,13 +102,14 @@ _FUNCTION_DECLARATIONS = [
     {"name": "areas_overview", "description": "Panorama por área (nº de proyectos, % de avance y cuántos en riesgo) y totales globales accesibles. Úsala para «cómo va cada área», comparativas entre áreas o el estado general del portafolio.", "parameters": {"type": "object", "properties": {}}},
     {"name": "upcoming_deliveries", "description": "Próximas entregas: proyectos no terminados con fecha de entrega, de la más cercana en adelante (con días restantes y avance). Úsala para «qué se entrega pronto», vencimientos o planificación.", "parameters": {"type": "object", "properties": {}}},
     {"name": "my_meetings", "description": "Reuniones próximas del calendario de Google del usuario (las suyas, no por proyecto): título, fecha/hora, enlace de Meet, lugar y asistentes. Úsala para «qué reuniones tengo», «mi agenda» o «esta semana». El parámetro «days» indica cuántos días hacia adelante mirar (1 = hoy, 7 = esta semana, 30 = este mes).", "parameters": {"type": "object", "properties": {"days": {"type": "integer", "description": "Días hacia adelante (por defecto 7)."}}}},
+    {"name": "find_meeting_slot", "description": "Mira la disponibilidad (free/busy de Calendar) de TODOS los miembros de un proyecto y propone el primer hueco común en horario laboral (8–18) de lunes a viernes, evitando el almuerzo (12–14). Úsala SIEMPRE antes de agendar una reunión «cuando todos estén libres» / «que coincida la disponibilidad». Devuelve start (ISO con zona), end, duration_minutes y attendees (los correos de los miembros). Después llama a create_meeting con ese when y esos attendees; no inventes el horario.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "days_ahead": {"type": "integer", "description": "Días hacia adelante a explorar (por defecto 7)."}}, "required": ["project_name"]}},
     {"name": "my_notifications", "description": "Alertas y notificaciones sin leer del usuario (riesgos detectados, resúmenes). Úsala para «tengo alertas», «qué riesgos hay» o «novedades».", "parameters": {"type": "object", "properties": {}}},
     {"name": "knowledge_search", "description": "Busca en los documentos/base de conocimiento de los proyectos del usuario, incluidos los archivos importados desde Drive. Úsala para preguntas sobre el contenido de actas, transcripciones, informes o documentos.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
     {"name": "create_project", "description": "Crea un proyecto en un área del usuario.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}}, "required": ["name"]}},
     {"name": "create_task", "description": "Crea UNA sola tarea dentro de un proyecto. Si vas a crear varias, usa create_tasks.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}, "assignee": {"type": "string", "description": "Nombre o correo del responsable, o 'mí' para el usuario actual."}}, "required": ["title"]}},
     {"name": "create_project_with_tasks", "description": "Crea un proyecto Y su listado completo de tareas en UNA sola confirmación. Úsala siempre que el usuario pida «crea un proyecto y sus tareas», un cronograma o un plan de trabajo, especialmente a partir de un acta o documento adjunto: extrae un nombre de proyecto y TODAS las tareas accionables de una vez (no las crees una por una).", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["name", "tasks"]}},
     {"name": "create_tasks", "description": "Crea VARIAS tareas a la vez (lote) en un proyecto que YA existe. Úsala cuando el usuario pida añadir un listado/cronograma de tareas a un proyecto existente (no las crees una por una).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["tasks"]}},
-    {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (opcional)"}}, "required": ["title"]}},
+    {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados. Para reuniones de un proyecto «cuando todos estén libres», llama antes a find_meeting_slot y pasa aquí su start como when y sus attendees.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}, "description": "Correos de los invitados."}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (idealmente el start que devuelve find_meeting_slot, con zona horaria)."}}, "required": ["title"]}},
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
     {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
@@ -236,6 +243,14 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.upcoming_deliveries(db, user)
     if name == "my_meetings":
         return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
+    if name == "find_meeting_slot":
+        return await tools.find_meeting_slot(
+            db,
+            user,
+            args.get("project_name", ""),
+            duration_minutes=int(args.get("duration_minutes") or 60),
+            days_ahead=int(args.get("days_ahead") or 7),
+        )
     if name == "my_notifications":
         return await tools.my_notifications(db, user)
     if name == "knowledge_search":
