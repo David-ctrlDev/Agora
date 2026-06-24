@@ -303,6 +303,27 @@ class DevAgentLLM:
         n = len(result.get("tasks", []))
         return f"✅ {n} tarea(s) creada(s) en «{result['project']}»."
 
+    def compose_create_sprint_proposal(self, args: dict[str, Any]) -> str:
+        lines = [
+            "Voy a crear este sprint (requiere tu confirmación):",
+            f"• Sprint: {args.get('name') or 'Sprint'}",
+            f"• Proyecto: {args.get('project_name') or '(no indicado)'}",
+        ]
+        if args.get("goal"):
+            lines.append(f"• Objetivo: {args['goal']}")
+        if args.get("start_date") or args.get("end_date"):
+            lines.append(f"• Fechas: {args.get('start_date') or '?'} → {args.get('end_date') or '?'}")
+        lines.append("Pulsa «Confirmar» para crearlo.")
+        return "\n".join(lines)
+
+    def compose_create_sprint_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear el sprint: {result.get('error', 'error desconocido')}"
+        return (
+            f"✅ Sprint «{result['name']}» creado en «{result['project']}» "
+            f"({result['start']} → {result['end']})."
+        )
+
     def compose_save_diagram_proposal(self, args: dict[str, Any]) -> str:
         return (
             "Voy a guardar este diagrama en la documentación del proyecto (requiere tu confirmación):\n"

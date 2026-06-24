@@ -352,6 +352,10 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_save_diagram(db, user, action.params)
         text = _llm.compose_save_diagram_result(result)
+    elif action.action_type == "create_sprint":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_sprint(db, user, action.params)
+        text = _llm.compose_create_sprint_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."

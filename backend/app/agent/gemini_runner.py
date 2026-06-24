@@ -44,6 +44,9 @@ def _system(user: User) -> str:
         "o documento adjunto), usa create_project_with_tasks con TODAS las tareas en una sola "
         "llamada; si pide añadir varias tareas a un proyecto existente, usa create_tasks con la lista "
         "completa. Nunca crees las tareas de una en una ni te detengas tras crear solo el proyecto. "
+        "Al extraer tareas de un acta o documento, asigna el responsable de cada una (campo assignee) "
+        "cuando el documento lo indique. Para crear o planear un sprint usa create_sprint (acepta "
+        "fechas opcionales; si no las hay, usa las de por defecto). "
         "Cuando te pidan un diagrama de flujo, un proceso o un esquema, responde con un bloque de "
         "código ```mermaid``` en sintaxis Mermaid (p. ej. `flowchart TD` con nodos y flechas, o "
         "`sequenceDiagram`); se renderiza como un diagrama profesional en el chat. Si el proceso está "
@@ -64,6 +67,7 @@ _ACTION_TOOLS = {
     "update_task",
     "assign_task",
     "save_diagram",
+    "create_sprint",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -100,6 +104,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
     {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
     {"name": "save_diagram", "description": "Guarda en la documentación de un proyecto un diagrama que TÚ generaste (código Mermaid). Úsala cuando el usuario pida guardar o asignar un diagrama a un proyecto. Pasa el código Mermaid completo del diagrama del que se habla.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string"}, "mermaid": {"type": "string", "description": "Código Mermaid completo del diagrama a guardar."}}, "required": ["project_name", "mermaid"]}},
+    {"name": "create_sprint", "description": "Crea un sprint en un proyecto. Úsala cuando el usuario pida crear/planear un sprint (p. ej. a partir de un acta o de las tareas existentes). Si no se indican fechas, se usan por defecto (hoy y +14 días).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "name": {"type": "string"}, "goal": {"type": "string", "description": "Objetivo del sprint (opcional)."}, "start_date": {"type": "string", "description": "Fecha inicio ISO YYYY-MM-DD (opcional)."}, "end_date": {"type": "string", "description": "Fecha fin ISO YYYY-MM-DD (opcional)."}}, "required": ["project_name", "name"]}},
 ]
 
 _TOOLS = [types.Tool(function_declarations=_FUNCTION_DECLARATIONS)]
@@ -178,6 +183,14 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
             "title": args.get("title") or "Diagrama",
             "mermaid": args.get("mermaid", ""),
         }
+    if name == "create_sprint":
+        return {
+            "project_name": args.get("project_name", ""),
+            "name": args.get("name") or "Sprint",
+            "goal": args.get("goal") or "",
+            "start_date": args.get("start_date") or "",
+            "end_date": args.get("end_date") or "",
+        }
     return dict(args)
 
 
@@ -192,6 +205,7 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "update_task": _dev.compose_update_task_proposal,
         "assign_task": _dev.compose_assign_task_proposal,
         "save_diagram": _dev.compose_save_diagram_proposal,
+        "create_sprint": _dev.compose_create_sprint_proposal,
     }[name]
     return composer(params)
 
@@ -240,7 +254,7 @@ async def run_turn(
     system = _system(user)
     config = types.GenerateContentConfig(system_instruction=system, tools=_TOOLS, temperature=0)
 
-    for _ in range(6):
+    for _ in range(8):
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=settings.gemini_chat_model,
@@ -270,12 +284,24 @@ async def run_turn(
             )
         )
 
-    # Forzar una respuesta final en texto con el contexto ya recogido (sin más herramientas).
+    # Último turno: ya sin herramientas. Que responda con lo recogido y, si no pudo
+    # completar algo, lo diga y sugiera el siguiente paso (en vez de quedarse corto).
+    final_system = (
+        system
+        + " Este es tu ÚLTIMO turno y ya NO puedes usar herramientas. Responde de forma útil con "
+        "la información que tengas. Si no pudiste completar algo (faltan datos, no identificaste "
+        "el proyecto, o la acción no existe), dilo con claridad y propón el siguiente paso o pide "
+        "lo que falta. Nunca respondas en vacío ni con evasivas."
+    )
     final = await asyncio.to_thread(
         client.models.generate_content,
         model=settings.gemini_chat_model,
         contents=contents,
-        config=types.GenerateContentConfig(system_instruction=system, temperature=0),
+        config=types.GenerateContentConfig(system_instruction=final_system, temperature=0),
     )
     text = (final.text or "").strip()
-    return (text or "Revisé tus proyectos pero no encontré nada concreto para responder."), None
+    return (
+        text
+        or "No logré completar del todo lo que pediste. ¿Me das un poco más de detalle "
+        "—el proyecto, las fechas o a quién asignar— para intentarlo de nuevo?"
+    ), None
