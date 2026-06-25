@@ -409,6 +409,41 @@ async def list_tasks(db: AsyncSession, user: User, project_name: str) -> dict[st
     }
 
 
+async def list_sprints(db: AsyncSession, user: User, project_name: str) -> dict[str, Any]:
+    """Sprints de un proyecto (nombre, objetivo, fechas, estado)."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"error": "no tienes proyectos accesibles.", "sprints": []}
+    rows = (
+        await db.execute(
+            select(Project).where(Project.id.in_(pids)).order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    who = (project_name or "").strip().lower()
+    project = next((p for p in rows if who and who in p.name.lower()), None)
+    if project is None and len(rows) == 1:
+        project = rows[0]
+    if project is None:
+        return {"error": f"no identifiqué el proyecto «{project_name}».", "sprints": []}
+    from app.services import sprints as sprints_svc
+
+    items = await sprints_svc.list_sprints(db, project.id)
+    return {
+        "project": project.name,
+        "count": len(items),
+        "sprints": [
+            {
+                "name": s.name,
+                "goal": s.goal,
+                "status": s.status,
+                "start_date": s.start_date.isoformat() if s.start_date else None,
+                "end_date": s.end_date.isoformat() if s.end_date else None,
+            }
+            for s in items
+        ],
+    }
+
+
 async def list_project_members(db: AsyncSession, user: User, project_name: str) -> dict[str, Any]:
     """Miembros de un proyecto (nombre, correo y rol)."""
     pids = await _accessible_project_ids(db, user)

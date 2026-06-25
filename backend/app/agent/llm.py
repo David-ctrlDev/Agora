@@ -355,6 +355,33 @@ class DevAgentLLM:
             f"({result['start']} → {result['end']})."
         )
 
+    def compose_update_sprint_proposal(self, args: dict[str, Any]) -> str:
+        etiquetas = {"new_name": "nombre", "goal": "objetivo", "start_date": "inicio", "end_date": "fin", "status": "estado"}
+        cambios = [f"{etiquetas[k]} → {args[k]}" for k in etiquetas if str(args.get(k) or "").strip()]
+        return (
+            "Voy a actualizar este sprint (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}  ·  Sprint: {args.get('sprint_name') or '(no indicado)'}\n"
+            f"• Cambios: {'; '.join(cambios) if cambios else '(sin cambios indicados)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_update_sprint_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude actualizar el sprint: {result.get('error', 'error desconocido')}"
+        return f"✅ Sprint «{result['name']}» actualizado en «{result['project']}»."
+
+    def compose_delete_sprint_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "⚠️ Voy a ELIMINAR este sprint (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}  ·  Sprint: {args.get('sprint_name') or '(no indicado)'}\n"
+            "Esta acción no se puede deshacer. Pulsa «Confirmar»."
+        )
+
+    def compose_delete_sprint_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude eliminar el sprint: {result.get('error', 'error desconocido')}"
+        return f"🗑️ Sprint «{result['name']}» eliminado de «{result['project']}»."
+
     def compose_save_diagram_proposal(self, args: dict[str, Any]) -> str:
         return (
             "Voy a guardar este diagrama en la documentación del proyecto (requiere tu confirmación):\n"

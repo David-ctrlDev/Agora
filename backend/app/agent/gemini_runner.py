@@ -71,7 +71,8 @@ def _system(user: User) -> str:
         "Si el documento no indica responsable para una tarea, déjala SIN asignar (assignee vacío). "
         "Nunca asignes todas las tareas al usuario que pide salvo que el documento lo diga. "
         "Para crear o planear un sprint usa create_sprint (acepta fechas opcionales; si no las hay, "
-        "usa las de por defecto). "
+        "usa las de por defecto); para ver los sprints usa list_sprints, para editar uno update_sprint "
+        "y para borrarlo delete_sprint. "
         "Cuando te pidan un diagrama de flujo, un proceso o un esquema, responde con un bloque de "
         "código ```mermaid``` en sintaxis Mermaid (p. ej. `flowchart TD` con nodos y flechas, o "
         "`sequenceDiagram`); se renderiza como un diagrama profesional en el chat. Si el proceso está "
@@ -107,6 +108,8 @@ _ACTION_TOOLS = {
     "update_project",
     "add_project_member",
     "remove_project_member",
+    "update_sprint",
+    "delete_sprint",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -149,6 +152,9 @@ _FUNCTION_DECLARATIONS = [
     {"name": "comment_task", "description": "Añade un comentario a una tarea (identificada por su título).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string", "description": "Texto del comentario."}}, "required": ["title", "body"]}},
     {"name": "save_diagram", "description": "Guarda en la documentación de un proyecto un diagrama que TÚ generaste (código Mermaid). Úsala cuando el usuario pida guardar o asignar un diagrama a un proyecto. Pasa el código Mermaid completo del diagrama del que se habla.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string"}, "mermaid": {"type": "string", "description": "Código Mermaid completo del diagrama a guardar."}}, "required": ["project_name", "mermaid"]}},
     {"name": "create_sprint", "description": "Crea un sprint en un proyecto. Úsala cuando el usuario pida crear/planear un sprint (p. ej. a partir de un acta o de las tareas existentes). Si no se indican fechas, se usan por defecto (hoy y +14 días).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "name": {"type": "string"}, "goal": {"type": "string", "description": "Objetivo del sprint (opcional)."}, "start_date": {"type": "string", "description": "Fecha inicio ISO YYYY-MM-DD (opcional)."}, "end_date": {"type": "string", "description": "Fecha fin ISO YYYY-MM-DD (opcional)."}}, "required": ["project_name", "name"]}},
+    {"name": "list_sprints", "description": "Lista los sprints de un proyecto (nombre, objetivo, fechas y estado). Úsala para «qué sprints tiene X» o ver su planificación.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
+    {"name": "update_sprint", "description": "Edita un sprint existente (lo identifica por su nombre dentro del proyecto). Cambia nombre (new_name), objetivo (goal), fechas o estado (planned/active/completed). Pasa solo los campos a cambiar.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "sprint_name": {"type": "string"}, "new_name": {"type": "string"}, "goal": {"type": "string"}, "start_date": {"type": "string", "description": "ISO YYYY-MM-DD."}, "end_date": {"type": "string", "description": "ISO YYYY-MM-DD."}, "status": {"type": "string", "enum": ["planned", "active", "completed"]}}, "required": ["project_name", "sprint_name"]}},
+    {"name": "delete_sprint", "description": "Elimina un sprint (identificado por su nombre dentro del proyecto). Irreversible; requiere edición.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "sprint_name": {"type": "string"}}, "required": ["project_name", "sprint_name"]}},
     {"name": "list_project_members", "description": "Lista los miembros de un proyecto (nombre, correo y rol). Úsala para «quiénes están en el proyecto X» o «sus miembros».", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "update_project", "description": "Edita campos de un proyecto existente (lo identifica por su nombre). Puede cambiar: estado (planned/active/on_hold/done/archived), nombre (new_name), descripción, fecha de inicio/entrega, avance (0–100), criticidad, categoría o dueño (owner por nombre/correo). Pasa solo los campos a cambiar. Para archivar puedes usar esto con status=archived o archive_project.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "status": {"type": "string", "enum": ["planned", "active", "on_hold", "done", "archived"]}, "new_name": {"type": "string"}, "description": {"type": "string"}, "start_date": {"type": "string", "description": "ISO YYYY-MM-DD."}, "due_date": {"type": "string", "description": "ISO YYYY-MM-DD."}, "progress": {"type": "integer", "description": "Avance 0–100."}, "criticality": {"type": "string"}, "category": {"type": "string"}, "owner": {"type": "string", "description": "Nuevo dueño (nombre o correo)."}}, "required": ["project_name"]}},
     {"name": "add_project_member", "description": "Añade una persona como miembro de un proyecto (o cambia su rol si ya es miembro). Requiere permiso de edición.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "person": {"type": "string", "description": "Nombre o correo de la persona."}, "role": {"type": "string", "enum": ["owner", "editor", "viewer"], "description": "Rol (por defecto editor)."}}, "required": ["project_name", "person"]}},
@@ -277,6 +283,18 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
         }
     if name == "remove_project_member":
         return {"project_name": args.get("project_name", ""), "person": args.get("person", "")}
+    if name == "update_sprint":
+        return {
+            "project_name": args.get("project_name", ""),
+            "sprint_name": args.get("sprint_name", ""),
+            "new_name": args.get("new_name") or "",
+            "goal": args.get("goal") or "",
+            "start_date": args.get("start_date") or "",
+            "end_date": args.get("end_date") or "",
+            "status": args.get("status") or "",
+        }
+    if name == "delete_sprint":
+        return {"project_name": args.get("project_name", ""), "sprint_name": args.get("sprint_name", "")}
     return dict(args)
 
 
@@ -299,6 +317,8 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "update_project": _dev.compose_update_project_proposal,
         "add_project_member": _dev.compose_add_project_member_proposal,
         "remove_project_member": _dev.compose_remove_project_member_proposal,
+        "update_sprint": _dev.compose_update_sprint_proposal,
+        "delete_sprint": _dev.compose_delete_sprint_proposal,
     }[name]
     return composer(params)
 
@@ -328,6 +348,8 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.list_tasks(db, user, args.get("project_name", ""))
     if name == "list_project_members":
         return await tools.list_project_members(db, user, args.get("project_name", ""))
+    if name == "list_sprints":
+        return await tools.list_sprints(db, user, args.get("project_name", ""))
     if name == "my_meetings":
         return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
     if name == "find_meeting_slot":

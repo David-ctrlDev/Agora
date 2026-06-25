@@ -669,3 +669,70 @@ async def execute_remove_project_member(db: AsyncSession, user: User, params: di
         return {"ok": False, "error": f"no encontré al usuario «{params.get('person', '')}»."}
     await projects_svc.remove_member(db, project.id, target.id)
     return {"ok": True, "project": project.name, "person": target.name}
+
+
+async def _find_sprint(db: AsyncSession, project_id: int, sprint_name: str | None):
+    """Encuentra el Sprint (ORM) de un proyecto por su nombre."""
+    from app.services import sprints as sprints_svc
+
+    items = await sprints_svc.list_sprints(db, project_id)
+    who = (sprint_name or "").strip().lower()
+    sr = next((s for s in items if who and who in s.name.lower()), None)
+    if sr is None and len(items) == 1:
+        sr = items[0]
+    if sr is None:
+        return None
+    return await sprints_svc.get_sprint(db, sr.id)
+
+
+async def execute_update_sprint(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Edita un sprint (nombre, objetivo, fechas o estado). Requiere edición."""
+    from app.schemas.sprint import SprintUpdate
+    from app.services import projects as projects_svc
+    from app.services import sprints as sprints_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    sprint = await _find_sprint(db, project.id, params.get("sprint_name"))
+    if sprint is None:
+        return {"ok": False, "error": f"no encontré el sprint «{params.get('sprint_name', '')}» en {project.name}."}
+    fields: dict[str, Any] = {}
+    if (params.get("new_name") or "").strip():
+        fields["name"] = params["new_name"].strip()[:200]
+    if params.get("goal"):
+        fields["goal"] = params["goal"]
+    if params.get("start_date"):
+        d = _parse_task_due(params["start_date"])
+        if d:
+            fields["start_date"] = d
+    if params.get("end_date"):
+        d = _parse_task_due(params["end_date"])
+        if d:
+            fields["end_date"] = d
+    if params.get("status") in ("planned", "active", "completed"):
+        fields["status"] = params["status"]
+    if not fields:
+        return {"ok": False, "error": "no indicaste qué cambiar del sprint."}
+    read = await sprints_svc.update_sprint(db, sprint, SprintUpdate(**fields))
+    return {"ok": True, "project": project.name, "name": read.name, "changed": list(fields.keys())}
+
+
+async def execute_delete_sprint(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Elimina un sprint. Requiere edición."""
+    from app.services import projects as projects_svc
+    from app.services import sprints as sprints_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    sprint = await _find_sprint(db, project.id, params.get("sprint_name"))
+    if sprint is None:
+        return {"ok": False, "error": f"no encontré el sprint «{params.get('sprint_name', '')}» en {project.name}."}
+    name = sprint.name
+    await sprints_svc.delete_sprint(db, sprint)
+    return {"ok": True, "project": project.name, "name": name}

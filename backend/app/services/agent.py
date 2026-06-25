@@ -385,6 +385,14 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_remove_project_member(db, user, action.params)
         text = _llm.compose_remove_project_member_result(result)
+    elif action.action_type == "update_sprint":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_update_sprint(db, user, action.params)
+        text = _llm.compose_update_sprint_result(result)
+    elif action.action_type == "delete_sprint":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_delete_sprint(db, user, action.params)
+        text = _llm.compose_delete_sprint_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."
