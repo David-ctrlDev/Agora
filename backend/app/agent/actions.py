@@ -3,7 +3,7 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -568,3 +568,104 @@ async def execute_delete_project(db: AsyncSession, user: User, params: dict[str,
     name = project.name
     await projects_svc.delete_project(db, project)
     return {"ok": True, "name": name}
+
+
+async def _resolve_user(db: AsyncSession, who: str | None):
+    """Encuentra un usuario por correo exacto o por coincidencia de nombre/correo."""
+    who = (who or "").strip().lower()
+    if not who:
+        return None
+    return (
+        await db.execute(
+            select(User)
+            .where(
+                or_(
+                    func.lower(User.email) == who,
+                    func.lower(User.name).contains(who),
+                    func.lower(User.email).contains(who),
+                )
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def execute_update_project(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Edita campos de un proyecto: estado, nombre, descripción, fechas, avance,
+    criticidad, categoría o dueño. Requiere permiso de edición."""
+    from app.schemas.project import ProjectUpdate
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    fields: dict[str, Any] = {}
+    if params.get("status"):
+        fields["status"] = params["status"]
+    if (params.get("new_name") or "").strip():
+        fields["name"] = params["new_name"].strip()[:200]
+    if params.get("description"):
+        fields["description"] = params["description"]
+    if params.get("due_date"):
+        d = _parse_task_due(params["due_date"])
+        if d:
+            fields["due_date"] = d
+    if params.get("start_date"):
+        d = _parse_task_due(params["start_date"])
+        if d:
+            fields["start_date"] = d
+    if str(params.get("progress") or "").strip():
+        try:
+            fields["progress"] = max(0, min(int(params["progress"]), 100))
+        except (TypeError, ValueError):
+            pass
+    if params.get("criticality"):
+        fields["criticality"] = params["criticality"]
+    if params.get("category"):
+        fields["category"] = params["category"]
+    if (params.get("owner") or "").strip():
+        owner = await _resolve_user(db, params["owner"])
+        if owner is None:
+            return {"ok": False, "error": f"no encontré al usuario «{params.get('owner', '')}» para dueño."}
+        fields["owner_id"] = owner.id
+    if not fields:
+        return {"ok": False, "error": "no indicaste qué cambiar del proyecto."}
+    read = await projects_svc.update_project(db, project, ProjectUpdate(**fields))
+    return {"ok": True, "name": read.name, "status": read.status, "changed": list(fields.keys())}
+
+
+async def execute_add_project_member(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Añade (o cambia el rol de) un miembro a un proyecto. Requiere edición."""
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    target = await _resolve_user(db, params.get("person"))
+    if target is None:
+        return {"ok": False, "error": f"no encontré al usuario «{params.get('person', '')}»."}
+    role = (params.get("role") or "editor").strip().lower()
+    if role not in ("owner", "editor", "viewer"):
+        role = "editor"
+    await projects_svc.add_member(db, project.id, target.id, role)
+    return {"ok": True, "project": project.name, "person": target.name, "role": role}
+
+
+async def execute_remove_project_member(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Quita un miembro de un proyecto. Requiere edición."""
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    target = await _resolve_user(db, params.get("person"))
+    if target is None:
+        return {"ok": False, "error": f"no encontré al usuario «{params.get('person', '')}»."}
+    await projects_svc.remove_member(db, project.id, target.id)
+    return {"ok": True, "project": project.name, "person": target.name}

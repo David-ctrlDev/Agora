@@ -373,6 +373,18 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_comment_task(db, user, action.params)
         text = _llm.compose_comment_task_result(result)
+    elif action.action_type == "update_project":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_update_project(db, user, action.params)
+        text = _llm.compose_update_project_result(result)
+    elif action.action_type == "add_project_member":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_add_project_member(db, user, action.params)
+        text = _llm.compose_add_project_member_result(result)
+    elif action.action_type == "remove_project_member":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_remove_project_member(db, user, action.params)
+        text = _llm.compose_remove_project_member_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."

@@ -81,7 +81,10 @@ def _system(user: User) -> str:
         "Para archivar un proyecto (quitarlo de la vista activa, REVERSIBLE) usa archive_project; "
         "para eliminarlo PERMANENTEMENTE (irreversible, solo propietario/admin) usa delete_project. "
         "Si el usuario dice «elimina/borra» pero parece que solo quiere ocultarlo, ofrécele archivarlo. "
-        "Ambas piden confirmación antes de ejecutarse. "
+        "Para cambiar datos de un proyecto (estado, nombre, descripción, fechas, avance, criticidad, "
+        "categoría o dueño) usa update_project con solo los campos a cambiar. Para el equipo del "
+        "proyecto: list_project_members (ver), add_project_member (añadir o cambiar rol) y "
+        "remove_project_member (quitar). Todas piden confirmación antes de ejecutarse. "
         "Responde SIEMPRE de "
         "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
     )
@@ -101,6 +104,9 @@ _ACTION_TOOLS = {
     "delete_project",
     "delete_task",
     "comment_task",
+    "update_project",
+    "add_project_member",
+    "remove_project_member",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -143,6 +149,10 @@ _FUNCTION_DECLARATIONS = [
     {"name": "comment_task", "description": "Añade un comentario a una tarea (identificada por su título).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string", "description": "Texto del comentario."}}, "required": ["title", "body"]}},
     {"name": "save_diagram", "description": "Guarda en la documentación de un proyecto un diagrama que TÚ generaste (código Mermaid). Úsala cuando el usuario pida guardar o asignar un diagrama a un proyecto. Pasa el código Mermaid completo del diagrama del que se habla.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string"}, "mermaid": {"type": "string", "description": "Código Mermaid completo del diagrama a guardar."}}, "required": ["project_name", "mermaid"]}},
     {"name": "create_sprint", "description": "Crea un sprint en un proyecto. Úsala cuando el usuario pida crear/planear un sprint (p. ej. a partir de un acta o de las tareas existentes). Si no se indican fechas, se usan por defecto (hoy y +14 días).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "name": {"type": "string"}, "goal": {"type": "string", "description": "Objetivo del sprint (opcional)."}, "start_date": {"type": "string", "description": "Fecha inicio ISO YYYY-MM-DD (opcional)."}, "end_date": {"type": "string", "description": "Fecha fin ISO YYYY-MM-DD (opcional)."}}, "required": ["project_name", "name"]}},
+    {"name": "list_project_members", "description": "Lista los miembros de un proyecto (nombre, correo y rol). Úsala para «quiénes están en el proyecto X» o «sus miembros».", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
+    {"name": "update_project", "description": "Edita campos de un proyecto existente (lo identifica por su nombre). Puede cambiar: estado (planned/active/on_hold/done/archived), nombre (new_name), descripción, fecha de inicio/entrega, avance (0–100), criticidad, categoría o dueño (owner por nombre/correo). Pasa solo los campos a cambiar. Para archivar puedes usar esto con status=archived o archive_project.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "status": {"type": "string", "enum": ["planned", "active", "on_hold", "done", "archived"]}, "new_name": {"type": "string"}, "description": {"type": "string"}, "start_date": {"type": "string", "description": "ISO YYYY-MM-DD."}, "due_date": {"type": "string", "description": "ISO YYYY-MM-DD."}, "progress": {"type": "integer", "description": "Avance 0–100."}, "criticality": {"type": "string"}, "category": {"type": "string"}, "owner": {"type": "string", "description": "Nuevo dueño (nombre o correo)."}}, "required": ["project_name"]}},
+    {"name": "add_project_member", "description": "Añade una persona como miembro de un proyecto (o cambia su rol si ya es miembro). Requiere permiso de edición.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "person": {"type": "string", "description": "Nombre o correo de la persona."}, "role": {"type": "string", "enum": ["owner", "editor", "viewer"], "description": "Rol (por defecto editor)."}}, "required": ["project_name", "person"]}},
+    {"name": "remove_project_member", "description": "Quita a una persona de los miembros de un proyecto. Requiere permiso de edición.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "person": {"type": "string", "description": "Nombre o correo de la persona."}}, "required": ["project_name", "person"]}},
     {"name": "archive_project", "description": "Archiva un proyecto (pasa a estado «archivado»). Es REVERSIBLE. Úsala cuando el usuario quiera quitar un proyecto de la vista activa sin borrarlo. Requiere permiso de edición sobre el proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "delete_project", "description": "Elimina un proyecto PERMANENTEMENTE, junto con sus tareas, comentarios y documentos. Es IRREVERSIBLE. Solo el propietario o un admin puede hacerlo. Úsala solo cuando el usuario pida explícitamente borrar/eliminar un proyecto; si parece que solo quiere quitarlo de la vista, sugiérele archivarlo (archive_project).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
 ]
@@ -246,6 +256,27 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
         }
     if name in ("archive_project", "delete_project"):
         return {"project_name": args.get("project_name", "")}
+    if name == "update_project":
+        return {
+            "project_name": args.get("project_name", ""),
+            "status": args.get("status") or "",
+            "new_name": args.get("new_name") or "",
+            "description": args.get("description") or "",
+            "start_date": args.get("start_date") or "",
+            "due_date": args.get("due_date") or "",
+            "progress": args.get("progress") if args.get("progress") is not None else "",
+            "criticality": args.get("criticality") or "",
+            "category": args.get("category") or "",
+            "owner": args.get("owner") or "",
+        }
+    if name == "add_project_member":
+        return {
+            "project_name": args.get("project_name", ""),
+            "person": args.get("person", ""),
+            "role": args.get("role") or "editor",
+        }
+    if name == "remove_project_member":
+        return {"project_name": args.get("project_name", ""), "person": args.get("person", "")}
     return dict(args)
 
 
@@ -265,6 +296,9 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "delete_project": _dev.compose_delete_project_proposal,
         "delete_task": _dev.compose_delete_task_proposal,
         "comment_task": _dev.compose_comment_task_proposal,
+        "update_project": _dev.compose_update_project_proposal,
+        "add_project_member": _dev.compose_add_project_member_proposal,
+        "remove_project_member": _dev.compose_remove_project_member_proposal,
     }[name]
     return composer(params)
 
@@ -292,6 +326,8 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.upcoming_deliveries(db, user)
     if name == "list_tasks":
         return await tools.list_tasks(db, user, args.get("project_name", ""))
+    if name == "list_project_members":
+        return await tools.list_project_members(db, user, args.get("project_name", ""))
     if name == "my_meetings":
         return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
     if name == "find_meeting_slot":

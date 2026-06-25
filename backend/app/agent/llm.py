@@ -419,6 +419,56 @@ class DevAgentLLM:
             return f"No pude eliminar el proyecto: {result.get('error', 'error desconocido')}"
         return f"🗑️ Proyecto «{result['name']}» eliminado permanentemente."
 
+    def compose_update_project_proposal(self, args: dict[str, Any]) -> str:
+        etiquetas = {
+            "status": "estado", "new_name": "nombre", "description": "descripción",
+            "due_date": "fecha de entrega", "start_date": "fecha de inicio",
+            "progress": "avance", "criticality": "criticidad", "category": "categoría",
+            "owner": "dueño",
+        }
+        cambios = [
+            f"{etiquetas[k]} → {args[k]}"
+            for k in etiquetas
+            if str(args.get(k) or "").strip()
+        ]
+        detalle = "; ".join(cambios) if cambios else "(sin cambios indicados)"
+        return (
+            "Voy a actualizar este proyecto (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n• Cambios: {detalle}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_update_project_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude actualizar el proyecto: {result.get('error', 'error desconocido')}"
+        return f"✅ Proyecto «{result['name']}» actualizado."
+
+    def compose_add_project_member_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a añadir un miembro al proyecto (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n"
+            f"• Persona: {args.get('person') or '(no indicada)'}  ·  Rol: {args.get('role') or 'editor'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_add_project_member_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude añadir al miembro: {result.get('error', 'error desconocido')}"
+        return f"✅ {result['person']} añadido a «{result['project']}» como {result['role']}."
+
+    def compose_remove_project_member_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a quitar un miembro del proyecto (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n"
+            f"• Persona: {args.get('person') or '(no indicada)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_remove_project_member_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude quitar al miembro: {result.get('error', 'error desconocido')}"
+        return f"✅ {result['person']} quitado de «{result['project']}»."
+
     def compose_update_task_proposal(self, args: dict[str, Any]) -> str:
         cambios = []
         if args.get("status"):
