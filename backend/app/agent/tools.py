@@ -374,6 +374,41 @@ async def upcoming_deliveries(db: AsyncSession, user: User, limit: int = 10) -> 
     ]
 
 
+async def list_tasks(db: AsyncSession, user: User, project_name: str) -> dict[str, Any]:
+    """Tareas de un proyecto (título, estado, prioridad, responsable, fecha)."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"error": "no tienes proyectos accesibles.", "tasks": []}
+    rows = (
+        await db.execute(
+            select(Project).where(Project.id.in_(pids)).order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    who = (project_name or "").strip().lower()
+    project = next((p for p in rows if who and who in p.name.lower()), None)
+    if project is None and len(rows) == 1:
+        project = rows[0]
+    if project is None:
+        return {"error": f"no identifiqué el proyecto «{project_name}».", "tasks": []}
+    from app.services import tasks as tasks_svc
+
+    items = await tasks_svc.list_project_tasks(db, project.id)
+    return {
+        "project": project.name,
+        "count": len(items),
+        "tasks": [
+            {
+                "title": t.title,
+                "status": t.status,
+                "priority": t.priority,
+                "assignee": t.assignee_name,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
+            }
+            for t in items
+        ],
+    }
+
+
 async def find_meeting_slot(
     db: AsyncSession,
     user: User,

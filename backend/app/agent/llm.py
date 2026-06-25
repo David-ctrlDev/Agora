@@ -420,16 +420,54 @@ class DevAgentLLM:
         return f"🗑️ Proyecto «{result['name']}» eliminado permanentemente."
 
     def compose_update_task_proposal(self, args: dict[str, Any]) -> str:
+        cambios = []
+        if args.get("status"):
+            cambios.append(f"estado → {args['status']}")
+        if args.get("priority"):
+            cambios.append(f"prioridad → {args['priority']}")
+        if args.get("due_date"):
+            cambios.append(f"fecha → {args['due_date']}")
+        if (args.get("new_title") or "").strip():
+            cambios.append(f"título → {args['new_title']}")
+        if args.get("description"):
+            cambios.append("descripción")
+        if not cambios:
+            cambios.append("estado → done")
         return (
             "Voy a actualizar esta tarea (requiere tu confirmación):\n"
-            f"• Tarea: {args['title'] or '(no identificada)'}\n• Nuevo estado: {args['status']}\n"
+            f"• Tarea: {args.get('title') or '(no identificada)'}\n• Cambios: {', '.join(cambios)}\n"
             "Pulsa «Confirmar»."
         )
 
     def compose_update_task_result(self, result: dict[str, Any]) -> str:
         if not result.get("ok"):
             return f"No pude actualizar la tarea: {result.get('error', 'error desconocido')}"
-        return f"✅ Tarea «{result['title']}» → {result['status']} ({result['project']})."
+        return f"✅ Tarea «{result['title']}» actualizada (estado: {result['status']}) en {result['project']}."
+
+    def compose_delete_task_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "⚠️ Voy a ELIMINAR esta tarea (requiere tu confirmación):\n"
+            f"• Tarea: {args.get('title') or '(no identificada)'}\n"
+            "Esta acción no se puede deshacer. Pulsa «Confirmar»."
+        )
+
+    def compose_delete_task_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude eliminar la tarea: {result.get('error', 'error desconocido')}"
+        return f"🗑️ Tarea «{result['title']}» eliminada ({result['project']})."
+
+    def compose_comment_task_proposal(self, args: dict[str, Any]) -> str:
+        body = (args.get("body") or "")[:200]
+        return (
+            "Voy a añadir este comentario (requiere tu confirmación):\n"
+            f"• Tarea: {args.get('title') or '(no identificada)'}\n• Comentario: {body}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_comment_task_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude añadir el comentario: {result.get('error', 'error desconocido')}"
+        return f"✅ Comentario añadido a «{result['title']}» ({result['project']})."
 
     def compose_assign_task_proposal(self, args: dict[str, Any]) -> str:
         return (

@@ -365,6 +365,14 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_delete_project(db, user, action.params)
         text = _llm.compose_delete_project_result(result)
+    elif action.action_type == "delete_task":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_delete_task(db, user, action.params)
+        text = _llm.compose_delete_task_result(result)
+    elif action.action_type == "comment_task":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_comment_task(db, user, action.params)
+        text = _llm.compose_comment_task_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."

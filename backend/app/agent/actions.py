@@ -440,6 +440,7 @@ async def _find_task(db: AsyncSession, user: User, title: str):
 
 
 async def execute_update_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Edita campos de una tarea: estado, prioridad, fecha, título o descripción."""
     from app.schemas.task import TaskUpdate
     from app.services import projects as projects_svc
     from app.services import tasks as tasks_svc
@@ -450,8 +451,64 @@ async def execute_update_task(db: AsyncSession, user: User, params: dict[str, An
     task, project = found
     if not await projects_svc.can_edit(db, user, project):
         return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
-    updated = await tasks_svc.update_task(db, task, TaskUpdate(status=params.get("status", "done")))
-    return {"ok": True, "title": updated.title, "status": updated.status, "project": project.name}
+    fields: dict[str, Any] = {}
+    if params.get("status"):
+        fields["status"] = params["status"]
+    if params.get("priority"):
+        fields["priority"] = _coerce_priority(params["priority"])
+    if params.get("due_date"):
+        due = _parse_task_due(params["due_date"])
+        if due:
+            fields["due_date"] = due
+    if (params.get("new_title") or "").strip():
+        fields["title"] = params["new_title"].strip()[:300]
+    if params.get("description"):
+        fields["description"] = params["description"]
+    if not fields:
+        fields["status"] = "done"  # compat: «marca la tarea como hecha»
+    updated = await tasks_svc.update_task(db, task, TaskUpdate(**fields))
+    return {
+        "ok": True,
+        "title": updated.title,
+        "status": updated.status,
+        "priority": getattr(updated, "priority", None),
+        "project": project.name,
+        "changed": list(fields.keys()),
+    }
+
+
+async def execute_delete_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Elimina una tarea. Requiere permiso de edición en su proyecto."""
+    from app.services import projects as projects_svc
+    from app.services import tasks as tasks_svc
+
+    found = await _find_task(db, user, params.get("title", ""))
+    if found is None:
+        return {"ok": False, "error": f"no encontré la tarea «{params.get('title', '')}»."}
+    task, project = found
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
+    title = task.title
+    await tasks_svc.delete_task(db, task)
+    return {"ok": True, "title": title, "project": project.name}
+
+
+async def execute_comment_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Añade un comentario a una tarea. Basta con acceso al proyecto."""
+    from app.services import comments as comments_svc
+    from app.services import projects as projects_svc
+
+    found = await _find_task(db, user, params.get("title", ""))
+    if found is None:
+        return {"ok": False, "error": f"no encontré la tarea «{params.get('title', '')}»."}
+    task, project = found
+    if not await projects_svc.can_access(db, user, project):
+        return {"ok": False, "error": "no tienes acceso a esa tarea."}
+    body = (params.get("body") or "").strip()
+    if not body:
+        return {"ok": False, "error": "no recibí el texto del comentario."}
+    await comments_svc.add_comment(db, task.id, user.id, body)
+    return {"ok": True, "title": task.title, "project": project.name}
 
 
 async def execute_assign_task(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:

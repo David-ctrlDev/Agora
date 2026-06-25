@@ -55,8 +55,12 @@ def _system(user: User) -> str:
         "create_meeting solo para reuniones con hora y asistentes EXPLÍCITOS que indique el usuario. "
         "Si preguntan por «mis tareas» o «qué "
         "tengo», usa my_tasks; si preguntan por las tareas de una persona (incluido el propio "
-        "usuario por su nombre), usa tasks_by_assignee. Para acciones con efecto (crear proyecto o "
-        "tarea, crear reunión, enviar correo, cambiar o asignar tareas) llama a la herramienta "
+        "usuario por su nombre), usa tasks_by_assignee; para «las tareas del proyecto X» o ver su "
+        "tablero, usa list_tasks. Sobre una tarea concreta: update_task edita estado, prioridad, "
+        "fecha, título o descripción (solo los campos a cambiar); assign_task (re)asigna responsable; "
+        "delete_task la elimina; comment_task le añade un comentario. Para acciones con efecto (crear "
+        "proyecto o tarea, crear/agendar reunión, enviar correo, editar/asignar/eliminar/comentar "
+        "tareas, archivar/eliminar proyectos) llama a la herramienta "
         "correspondiente: el sistema pedirá confirmación antes de ejecutarla. MUY IMPORTANTE: si el "
         "usuario pide un proyecto Y sus tareas (un cronograma o plan, normalmente a partir de un acta "
         "o documento adjunto), usa create_project_with_tasks con TODAS las tareas en una sola "
@@ -95,6 +99,8 @@ _ACTION_TOOLS = {
     "create_sprint",
     "archive_project",
     "delete_project",
+    "delete_task",
+    "comment_task",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -114,6 +120,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "overdue_tasks", "description": "Lista las tareas vencidas en los proyectos del usuario.", "parameters": {"type": "object", "properties": {}}},
     {"name": "my_tasks", "description": "Tareas abiertas asignadas al usuario actual.", "parameters": {"type": "object", "properties": {}}},
     {"name": "tasks_by_assignee", "description": "Tareas asignadas a una persona (por nombre o correo).", "parameters": {"type": "object", "properties": {"person": {"type": "string"}}, "required": ["person"]}},
+    {"name": "list_tasks", "description": "Lista TODAS las tareas de un proyecto (título, estado, prioridad, responsable y fecha). Úsala para «qué tareas tiene el proyecto X», «lístame las tareas de X» o para ver el tablero de un proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "recent_activity", "description": "Actividad reciente del repositorio vinculado a los proyectos.", "parameters": {"type": "object", "properties": {}}},
     {"name": "project_summary", "description": "Resumen de un proyecto concreto, por su nombre.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "project_details", "description": "Ficha detallada de un proyecto por su nombre: estado, líder, avance %, categoría, criticidad, fechas, tareas, sprints y un ROI de dos lados — el proceso que lo hace (ejecutor: coste, esfuerzo en horas, equipo, complejidad, recursos) y el proceso para el que se hace (beneficiario: área, beneficio, horas ahorradas/mes y año, personas impactadas, reducción de riesgo, valor estratégico). Úsala para preguntas a fondo sobre un proyecto, su ROI, su impacto o su rentabilidad.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
@@ -130,8 +137,10 @@ _FUNCTION_DECLARATIONS = [
     {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados. Para reuniones de un proyecto «cuando todos estén libres», llama antes a find_meeting_slot y pasa aquí su start como when, sus attendees y el mismo duration_minutes.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}, "description": "Correos de los invitados."}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (idealmente el start que devuelve find_meeting_slot, con zona horaria)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "project_name": {"type": "string", "description": "Proyecto al que pertenece la reunión, para enlazarla (opcional)."}}, "required": ["title"]}},
     {"name": "schedule_meeting", "description": "Agenda una reunión de un proyecto EN EL PRIMER HUECO COMÚN de todos sus miembros (el servidor calcula el horario con free/busy y usa como asistentes a los miembros reales del proyecto). Úsala para «reúnenos cuando todos coincidan / respetando la disponibilidad». Es determinista: no inventes ni pases tú la hora ni los asistentes; solo el proyecto, la duración y, si quieres, el título. Devuelve la reunión lista para confirmar.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string", "description": "Título de la reunión (opcional)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "days_ahead": {"type": "integer", "description": "Días hacia adelante a explorar (por defecto 7)."}}, "required": ["project_name"]}},
     {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
-    {"name": "update_task", "description": "Cambia el estado de una tarea.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}}, "required": ["title", "status"]}},
-    {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
+    {"name": "update_task", "description": "Edita una tarea existente (la identifica por su título). Puede cambiar el estado, la prioridad, la fecha de entrega, el título o la descripción — pasa solo los campos a cambiar. Para cambiar el RESPONSABLE usa assign_task.", "parameters": {"type": "object", "properties": {"title": {"type": "string", "description": "Título actual de la tarea a editar."}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}, "priority": {"type": "string", "enum": ["low", "medium", "high"]}, "due_date": {"type": "string", "description": "Nueva fecha de entrega ISO YYYY-MM-DD."}, "new_title": {"type": "string", "description": "Nuevo título (si se renombra)."}, "description": {"type": "string", "description": "Nueva descripción."}}, "required": ["title"]}},
+    {"name": "assign_task", "description": "Asigna/reasigna una tarea a una persona (nombre o correo, o «mí»).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
+    {"name": "delete_task", "description": "Elimina una tarea (la identifica por su título). Irreversible; requiere permiso de edición en el proyecto.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}},
+    {"name": "comment_task", "description": "Añade un comentario a una tarea (identificada por su título).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string", "description": "Texto del comentario."}}, "required": ["title", "body"]}},
     {"name": "save_diagram", "description": "Guarda en la documentación de un proyecto un diagrama que TÚ generaste (código Mermaid). Úsala cuando el usuario pida guardar o asignar un diagrama a un proyecto. Pasa el código Mermaid completo del diagrama del que se habla.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string"}, "mermaid": {"type": "string", "description": "Código Mermaid completo del diagrama a guardar."}}, "required": ["project_name", "mermaid"]}},
     {"name": "create_sprint", "description": "Crea un sprint en un proyecto. Úsala cuando el usuario pida crear/planear un sprint (p. ej. a partir de un acta o de las tareas existentes). Si no se indican fechas, se usan por defecto (hoy y +14 días).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "name": {"type": "string"}, "goal": {"type": "string", "description": "Objetivo del sprint (opcional)."}, "start_date": {"type": "string", "description": "Fecha inicio ISO YYYY-MM-DD (opcional)."}, "end_date": {"type": "string", "description": "Fecha fin ISO YYYY-MM-DD (opcional)."}}, "required": ["project_name", "name"]}},
     {"name": "archive_project", "description": "Archiva un proyecto (pasa a estado «archivado»). Es REVERSIBLE. Úsala cuando el usuario quiera quitar un proyecto de la vista activa sin borrarlo. Requiere permiso de edición sobre el proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
@@ -207,9 +216,20 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
             "assignee": args.get("assignee", ""),
         }
     if name == "update_task":
-        return {"title": args.get("title", ""), "status": args.get("status", "done")}
+        return {
+            "title": args.get("title", ""),
+            "status": args.get("status") or "",
+            "priority": args.get("priority") or "",
+            "due_date": args.get("due_date") or "",
+            "new_title": args.get("new_title") or "",
+            "description": args.get("description") or "",
+        }
     if name == "assign_task":
         return {"title": args.get("title", ""), "assignee": args.get("assignee", "")}
+    if name == "delete_task":
+        return {"title": args.get("title", "")}
+    if name == "comment_task":
+        return {"title": args.get("title", ""), "body": args.get("body", "")}
     if name == "save_diagram":
         return {
             "project_name": args.get("project_name", ""),
@@ -243,6 +263,8 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "create_sprint": _dev.compose_create_sprint_proposal,
         "archive_project": _dev.compose_archive_project_proposal,
         "delete_project": _dev.compose_delete_project_proposal,
+        "delete_task": _dev.compose_delete_task_proposal,
+        "comment_task": _dev.compose_comment_task_proposal,
     }[name]
     return composer(params)
 
@@ -268,6 +290,8 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.areas_overview(db, user)
     if name == "upcoming_deliveries":
         return await tools.upcoming_deliveries(db, user)
+    if name == "list_tasks":
+        return await tools.list_tasks(db, user, args.get("project_name", ""))
     if name == "my_meetings":
         return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
     if name == "find_meeting_slot":
