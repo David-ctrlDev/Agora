@@ -389,6 +389,36 @@ class DevAgentLLM:
         who = f" y asignada a {result['assignee']}" if result.get("assignee") else ""
         return f"✅ Tarea «{result['title']}» creada en {result['project']}{who}."
 
+    def compose_archive_project_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a archivar este proyecto (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n"
+            "Pasará a estado «Archivado»; es reversible (puedes reactivarlo después).\n"
+            "Pulsa «Confirmar» para archivarlo."
+        )
+
+    def compose_archive_project_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude archivar el proyecto: {result.get('error', 'error desconocido')}"
+        if result.get("already"):
+            return f"El proyecto «{result['name']}» ya estaba archivado."
+        return f"✅ Proyecto «{result['name']}» archivado."
+
+    def compose_delete_project_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "⚠️ Voy a ELIMINAR PERMANENTEMENTE este proyecto (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n"
+            "Se borrarán también sus tareas, comentarios y documentos asociados. "
+            "Esta acción NO se puede deshacer.\n"
+            "Si prefieres conservarlo, considera archivarlo en su lugar.\n"
+            "Pulsa «Confirmar» para eliminarlo definitivamente."
+        )
+
+    def compose_delete_project_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude eliminar el proyecto: {result.get('error', 'error desconocido')}"
+        return f"🗑️ Proyecto «{result['name']}» eliminado permanentemente."
+
     def compose_update_task_proposal(self, args: dict[str, Any]) -> str:
         return (
             "Voy a actualizar esta tarea (requiere tu confirmación):\n"

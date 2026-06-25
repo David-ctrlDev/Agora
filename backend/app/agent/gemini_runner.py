@@ -74,6 +74,10 @@ def _system(user: User) -> str:
         "en un acta o documento adjunto, extrae los pasos de ahí; mantén las etiquetas cortas. "
         "Si el usuario pide guardar o asignar un diagrama a un proyecto, usa save_diagram con el "
         "código Mermaid del diagrama; queda en la documentación del proyecto. "
+        "Para archivar un proyecto (quitarlo de la vista activa, REVERSIBLE) usa archive_project; "
+        "para eliminarlo PERMANENTEMENTE (irreversible, solo propietario/admin) usa delete_project. "
+        "Si el usuario dice «elimina/borra» pero parece que solo quiere ocultarlo, ofrécele archivarlo. "
+        "Ambas piden confirmación antes de ejecutarse. "
         "Responde SIEMPRE de "
         "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
     )
@@ -89,6 +93,8 @@ _ACTION_TOOLS = {
     "assign_task",
     "save_diagram",
     "create_sprint",
+    "archive_project",
+    "delete_project",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -128,6 +134,8 @@ _FUNCTION_DECLARATIONS = [
     {"name": "assign_task", "description": "Asigna una tarea a una persona (nombre o correo).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
     {"name": "save_diagram", "description": "Guarda en la documentación de un proyecto un diagrama que TÚ generaste (código Mermaid). Úsala cuando el usuario pida guardar o asignar un diagrama a un proyecto. Pasa el código Mermaid completo del diagrama del que se habla.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string"}, "mermaid": {"type": "string", "description": "Código Mermaid completo del diagrama a guardar."}}, "required": ["project_name", "mermaid"]}},
     {"name": "create_sprint", "description": "Crea un sprint en un proyecto. Úsala cuando el usuario pida crear/planear un sprint (p. ej. a partir de un acta o de las tareas existentes). Si no se indican fechas, se usan por defecto (hoy y +14 días).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "name": {"type": "string"}, "goal": {"type": "string", "description": "Objetivo del sprint (opcional)."}, "start_date": {"type": "string", "description": "Fecha inicio ISO YYYY-MM-DD (opcional)."}, "end_date": {"type": "string", "description": "Fecha fin ISO YYYY-MM-DD (opcional)."}}, "required": ["project_name", "name"]}},
+    {"name": "archive_project", "description": "Archiva un proyecto (pasa a estado «archivado»). Es REVERSIBLE. Úsala cuando el usuario quiera quitar un proyecto de la vista activa sin borrarlo. Requiere permiso de edición sobre el proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
+    {"name": "delete_project", "description": "Elimina un proyecto PERMANENTEMENTE, junto con sus tareas, comentarios y documentos. Es IRREVERSIBLE. Solo el propietario o un admin puede hacerlo. Úsala solo cuando el usuario pida explícitamente borrar/eliminar un proyecto; si parece que solo quiere quitarlo de la vista, sugiérele archivarlo (archive_project).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
 ]
 
 _TOOLS = [types.Tool(function_declarations=_FUNCTION_DECLARATIONS)]
@@ -216,6 +224,8 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
             "start_date": args.get("start_date") or "",
             "end_date": args.get("end_date") or "",
         }
+    if name in ("archive_project", "delete_project"):
+        return {"project_name": args.get("project_name", "")}
     return dict(args)
 
 
@@ -231,6 +241,8 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "assign_task": _dev.compose_assign_task_proposal,
         "save_diagram": _dev.compose_save_diagram_proposal,
         "create_sprint": _dev.compose_create_sprint_proposal,
+        "archive_project": _dev.compose_archive_project_proposal,
+        "delete_project": _dev.compose_delete_project_proposal,
     }[name]
     return composer(params)
 

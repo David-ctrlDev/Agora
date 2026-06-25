@@ -39,6 +39,25 @@ async def _resolve_project_id(db: AsyncSession, user: User, project_name: str | 
     return match
 
 
+async def _resolve_project(db: AsyncSession, user: User, project_name: str | None):
+    """Devuelve el Project accesible cuyo nombre coincide (el más específico), o None."""
+    from app.agent.tools import _accessible_project_ids
+    from app.models.project import Project
+
+    if not (project_name or "").strip():
+        return None
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return None
+    rows = (
+        await db.execute(
+            select(Project).where(Project.id.in_(pids)).order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    who = project_name.strip().lower()
+    return next((p for p in rows if who in (p.name or "").lower()), None)
+
+
 async def execute_create_meeting(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
     title = params.get("title", "Reunión")
     attendees = params.get("attendees", [])
@@ -462,3 +481,33 @@ async def execute_assign_task(db: AsyncSession, user: User, params: dict[str, An
         return {"ok": False, "error": f"no encontré al usuario «{params.get('assignee', '')}»."}
     await tasks_svc.update_task(db, task, TaskUpdate(assignee_id=assignee.id))
     return {"ok": True, "title": task.title, "assignee": assignee.name, "project": project.name}
+
+
+async def execute_archive_project(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Archiva un proyecto (status=archived). Reversible. Requiere permiso de edición."""
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso para archivar «{project.name}»."}
+    if project.status == "archived":
+        return {"ok": True, "name": project.name, "already": True}
+    project.status = "archived"
+    await db.commit()
+    return {"ok": True, "name": project.name}
+
+
+async def execute_delete_project(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Elimina un proyecto PERMANENTEMENTE. Irreversible. Solo propietario o admin."""
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not (user.role == "admin" or project.owner_id == user.id):
+        return {"ok": False, "error": f"solo el propietario o un admin puede eliminar «{project.name}»."}
+    name = project.name
+    await projects_svc.delete_project(db, project)
+    return {"ok": True, "name": name}

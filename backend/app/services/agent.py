@@ -357,6 +357,14 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_create_sprint(db, user, action.params)
         text = _llm.compose_create_sprint_result(result)
+    elif action.action_type == "archive_project":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_archive_project(db, user, action.params)
+        text = _llm.compose_archive_project_result(result)
+    elif action.action_type == "delete_project":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_delete_project(db, user, action.params)
+        text = _llm.compose_delete_project_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."
