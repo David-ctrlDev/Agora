@@ -409,6 +409,31 @@ async def list_tasks(db: AsyncSession, user: User, project_name: str) -> dict[st
     }
 
 
+async def list_areas(db: AsyncSession, user: User) -> dict[str, Any]:
+    """Lista las áreas (departamentos) de la organización con su nº de proyectos."""
+    areas = (await db.execute(select(Area).order_by(Area.name))).scalars().all()
+    out = []
+    for a in areas:
+        n = (
+            await db.execute(select(func.count(Project.id)).where(Project.area_id == a.id))
+        ).scalar() or 0
+        out.append({"name": a.name, "slug": a.slug, "projects": int(n), "active": a.is_active})
+    return {"count": len(out), "areas": out}
+
+
+async def list_users(db: AsyncSession, user: User) -> dict[str, Any]:
+    """Lista los usuarios del sistema (solo administradores)."""
+    if user.role != "admin":
+        return {"error": "solo un administrador puede listar usuarios.", "users": []}
+    rows = (await db.execute(select(User).order_by(User.name))).scalars().all()
+    return {
+        "count": len(rows),
+        "users": [
+            {"name": u.name, "email": u.email, "role": u.role, "active": u.is_active} for u in rows
+        ],
+    }
+
+
 async def list_sprints(db: AsyncSession, user: User, project_name: str) -> dict[str, Any]:
     """Sprints de un proyecto (nombre, objetivo, fechas, estado)."""
     pids = await _accessible_project_ids(db, user)

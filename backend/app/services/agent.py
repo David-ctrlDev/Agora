@@ -393,6 +393,26 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_delete_sprint(db, user, action.params)
         text = _llm.compose_delete_sprint_result(result)
+    elif action.action_type == "create_area":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_area(db, user, action.params)
+        text = _llm.compose_create_area_result(result)
+    elif action.action_type == "update_area":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_update_area(db, user, action.params)
+        text = _llm.compose_update_area_result(result)
+    elif action.action_type == "create_user":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_create_user(db, user, action.params)
+        text = _llm.compose_create_user_result(result)
+    elif action.action_type == "update_user_admin":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_update_user_admin(db, user, action.params)
+        text = _llm.compose_update_user_admin_result(result)
+    elif action.action_type == "set_user_areas":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_set_user_areas(db, user, action.params)
+        text = _llm.compose_set_user_areas_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."

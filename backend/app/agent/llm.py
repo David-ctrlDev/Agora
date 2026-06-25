@@ -382,6 +382,70 @@ class DevAgentLLM:
             return f"No pude eliminar el sprint: {result.get('error', 'error desconocido')}"
         return f"🗑️ Sprint «{result['name']}» eliminado de «{result['project']}»."
 
+    def compose_create_area_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a crear esta área (requiere tu confirmación):\n"
+            f"• Nombre: {args.get('name') or '(sin nombre)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_create_area_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear el área: {result.get('error', 'error desconocido')}"
+        return f"✅ Área «{result['name']}» creada."
+
+    def compose_update_area_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a actualizar esta área (requiere tu confirmación):\n"
+            f"• Área: {args.get('area_name') or '(no identificada)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_update_area_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude actualizar el área: {result.get('error', 'error desconocido')}"
+        return f"✅ Área «{result['name']}» actualizada."
+
+    def compose_create_user_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a crear este usuario (requiere tu confirmación):\n"
+            f"• Nombre: {args.get('name') or '(sin nombre)'}  ·  Correo: {args.get('email') or '(sin correo)'}\n"
+            f"• Rol: {args.get('role') or 'member'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_create_user_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude crear el usuario: {result.get('error', 'error desconocido')}"
+        return f"✅ Usuario «{result['name']}» ({result['email']}) creado como {result['role']}."
+
+    def compose_update_user_admin_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a actualizar este usuario (requiere tu confirmación):\n"
+            f"• Usuario: {args.get('person') or '(no identificado)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_update_user_admin_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude actualizar el usuario: {result.get('error', 'error desconocido')}"
+        return f"✅ Usuario «{result['name']}» ({result['email']}) actualizado."
+
+    def compose_set_user_areas_proposal(self, args: dict[str, Any]) -> str:
+        areas = args.get("area_names")
+        if isinstance(areas, list):
+            areas = ", ".join(areas)
+        return (
+            "Voy a asignar áreas a este usuario (requiere tu confirmación):\n"
+            f"• Usuario: {args.get('person') or '(no identificado)'}\n• Áreas: {areas or '(ninguna)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_set_user_areas_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude asignar las áreas: {result.get('error', 'error desconocido')}"
+        return f"✅ {result['person']} ahora pertenece a: {', '.join(result['areas'])}."
+
     def compose_save_diagram_proposal(self, args: dict[str, Any]) -> str:
         return (
             "Voy a guardar este diagrama en la documentación del proyecto (requiere tu confirmación):\n"

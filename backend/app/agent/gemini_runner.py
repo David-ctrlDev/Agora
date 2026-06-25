@@ -86,6 +86,9 @@ def _system(user: User) -> str:
         "categoría o dueño) usa update_project con solo los campos a cambiar. Para el equipo del "
         "proyecto: list_project_members (ver), add_project_member (añadir o cambiar rol) y "
         "remove_project_member (quitar). Todas piden confirmación antes de ejecutarse. "
+        "Áreas y usuarios (gestión): list_areas y list_users para consultar; create_area/update_area, "
+        "create_user/update_user_admin y set_user_areas para gestionar. Crear/editar áreas y usuarios "
+        "es SOLO para administradores; si el usuario no lo es, el servidor lo rechazará: explícaselo. "
         "Responde SIEMPRE de "
         "forma útil; si no hay datos, dilo con naturalidad y sugiere un siguiente paso."
     )
@@ -110,6 +113,11 @@ _ACTION_TOOLS = {
     "remove_project_member",
     "update_sprint",
     "delete_sprint",
+    "create_area",
+    "update_area",
+    "create_user",
+    "update_user_admin",
+    "set_user_areas",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -161,6 +169,13 @@ _FUNCTION_DECLARATIONS = [
     {"name": "remove_project_member", "description": "Quita a una persona de los miembros de un proyecto. Requiere permiso de edición.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "person": {"type": "string", "description": "Nombre o correo de la persona."}}, "required": ["project_name", "person"]}},
     {"name": "archive_project", "description": "Archiva un proyecto (pasa a estado «archivado»). Es REVERSIBLE. Úsala cuando el usuario quiera quitar un proyecto de la vista activa sin borrarlo. Requiere permiso de edición sobre el proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "delete_project", "description": "Elimina un proyecto PERMANENTEMENTE, junto con sus tareas, comentarios y documentos. Es IRREVERSIBLE. Solo el propietario o un admin puede hacerlo. Úsala solo cuando el usuario pida explícitamente borrar/eliminar un proyecto; si parece que solo quiere quitarlo de la vista, sugiérele archivarlo (archive_project).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
+    {"name": "list_areas", "description": "Lista las áreas (departamentos) de Invesa con su nº de proyectos. Úsala para «qué áreas hay» o «cuántos proyectos por área».", "parameters": {"type": "object", "properties": {}}},
+    {"name": "list_users", "description": "Lista los usuarios del sistema (nombre, correo, rol, activo). Solo administradores.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "create_area", "description": "Crea una nueva área/departamento. Solo administradores.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "description": {"type": "string"}}, "required": ["name"]}},
+    {"name": "update_area", "description": "Edita un área (nombre o descripción), identificándola por su nombre actual. Solo administradores.", "parameters": {"type": "object", "properties": {"area_name": {"type": "string"}, "new_name": {"type": "string"}, "description": {"type": "string"}}, "required": ["area_name"]}},
+    {"name": "create_user", "description": "Crea un usuario (correo del dominio de la empresa, nombre y rol). Solo administradores. Para asignarle áreas usa después set_user_areas.", "parameters": {"type": "object", "properties": {"email": {"type": "string"}, "name": {"type": "string"}, "role": {"type": "string", "enum": ["admin", "member"]}}, "required": ["email", "name"]}},
+    {"name": "update_user_admin", "description": "Edita un usuario (lo identifica por nombre o correo): cambia nombre (new_name), correo (new_email), rol o si está activo (is_active). Solo administradores.", "parameters": {"type": "object", "properties": {"person": {"type": "string"}, "new_name": {"type": "string"}, "new_email": {"type": "string"}, "role": {"type": "string", "enum": ["admin", "member"]}, "is_active": {"type": "boolean"}}, "required": ["person"]}},
+    {"name": "set_user_areas", "description": "Define a qué áreas pertenece un usuario (reemplaza sus áreas actuales). Solo administradores.", "parameters": {"type": "object", "properties": {"person": {"type": "string"}, "area_names": {"type": "array", "items": {"type": "string"}}}, "required": ["person", "area_names"]}},
 ]
 
 _TOOLS = [types.Tool(function_declarations=_FUNCTION_DECLARATIONS)]
@@ -295,6 +310,32 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
         }
     if name == "delete_sprint":
         return {"project_name": args.get("project_name", ""), "sprint_name": args.get("sprint_name", "")}
+    if name == "create_area":
+        return {"name": args.get("name", ""), "description": args.get("description") or ""}
+    if name == "update_area":
+        return {
+            "area_name": args.get("area_name", ""),
+            "new_name": args.get("new_name") or "",
+            "description": args.get("description") or "",
+        }
+    if name == "create_user":
+        return {
+            "email": args.get("email", ""),
+            "name": args.get("name", ""),
+            "role": args.get("role") or "member",
+        }
+    if name == "update_user_admin":
+        out = {
+            "person": args.get("person", ""),
+            "new_name": args.get("new_name") or "",
+            "new_email": args.get("new_email") or "",
+            "role": args.get("role") or "",
+        }
+        if "is_active" in args and args.get("is_active") is not None:
+            out["is_active"] = bool(args.get("is_active"))
+        return out
+    if name == "set_user_areas":
+        return {"person": args.get("person", ""), "area_names": list(args.get("area_names") or [])}
     return dict(args)
 
 
@@ -319,6 +360,11 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "remove_project_member": _dev.compose_remove_project_member_proposal,
         "update_sprint": _dev.compose_update_sprint_proposal,
         "delete_sprint": _dev.compose_delete_sprint_proposal,
+        "create_area": _dev.compose_create_area_proposal,
+        "update_area": _dev.compose_update_area_proposal,
+        "create_user": _dev.compose_create_user_proposal,
+        "update_user_admin": _dev.compose_update_user_admin_proposal,
+        "set_user_areas": _dev.compose_set_user_areas_proposal,
     }[name]
     return composer(params)
 
@@ -350,6 +396,10 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.list_project_members(db, user, args.get("project_name", ""))
     if name == "list_sprints":
         return await tools.list_sprints(db, user, args.get("project_name", ""))
+    if name == "list_areas":
+        return await tools.list_areas(db, user)
+    if name == "list_users":
+        return await tools.list_users(db, user)
     if name == "my_meetings":
         return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
     if name == "find_meeting_slot":

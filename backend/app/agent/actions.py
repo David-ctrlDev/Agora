@@ -736,3 +736,128 @@ async def execute_delete_sprint(db: AsyncSession, user: User, params: dict[str, 
     name = sprint.name
     await sprints_svc.delete_sprint(db, sprint)
     return {"ok": True, "project": project.name, "name": name}
+
+
+# ---------------------------------------------------------------------------
+# Administración (áreas y usuarios) — solo para administradores globales.
+# ---------------------------------------------------------------------------
+def _is_admin(user: User) -> bool:
+    return user.role == "admin"
+
+
+async def _resolve_area(db: AsyncSession, area_name: str | None):
+    from app.models.area import Area
+
+    who = (area_name or "").strip().lower()
+    if not who:
+        return None
+    rows = (
+        await db.execute(select(Area).order_by(func.length(Area.name).desc()))
+    ).scalars().all()
+    return next((a for a in rows if who in (a.name or "").lower()), None)
+
+
+async def execute_create_area(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    if not _is_admin(user):
+        return {"ok": False, "error": "solo un administrador puede crear áreas."}
+    from app.schemas.area import AreaCreate
+    from app.services import areas as areas_svc
+
+    name = (params.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "error": "falta el nombre del área."}
+    try:
+        area = await areas_svc.create_area(
+            db, AreaCreate(name=name, description=params.get("description") or None)
+        )
+    except areas_svc.AreaSlugExists:
+        return {"ok": False, "error": f"ya existe un área parecida a «{name}»."}
+    return {"ok": True, "name": area.name}
+
+
+async def execute_update_area(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    if not _is_admin(user):
+        return {"ok": False, "error": "solo un administrador puede editar áreas."}
+    area = await _resolve_area(db, params.get("area_name"))
+    if area is None:
+        return {"ok": False, "error": f"no encontré el área «{params.get('area_name', '')}»."}
+    changed = []
+    if (params.get("new_name") or "").strip():
+        area.name = params["new_name"].strip()[:120]
+        changed.append("nombre")
+    if params.get("description"):
+        area.description = params["description"]
+        changed.append("descripción")
+    if not changed:
+        return {"ok": False, "error": "no indicaste qué cambiar del área."}
+    await db.commit()
+    return {"ok": True, "name": area.name}
+
+
+async def execute_create_user(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    if not _is_admin(user):
+        return {"ok": False, "error": "solo un administrador puede crear usuarios."}
+    from app.schemas.admin import AdminUserCreate
+    from app.services import admin as admin_svc
+
+    email = (params.get("email") or "").strip()
+    name = (params.get("name") or "").strip()
+    if not email or not name:
+        return {"ok": False, "error": "necesito al menos el correo y el nombre."}
+    role = params.get("role") if params.get("role") in ("admin", "member") else "member"
+    try:
+        read = await admin_svc.create_user(db, AdminUserCreate(email=email, name=name, role=role))
+    except admin_svc.EmailExists:
+        return {"ok": False, "error": f"ya existe un usuario con el correo {email}."}
+    return {"ok": True, "name": read.name, "email": read.email, "role": read.role}
+
+
+async def execute_update_user_admin(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    if not _is_admin(user):
+        return {"ok": False, "error": "solo un administrador puede editar usuarios."}
+    from app.schemas.admin import AdminUserUpdate
+    from app.services import admin as admin_svc
+
+    target = await _resolve_user(db, params.get("person"))
+    if target is None:
+        return {"ok": False, "error": f"no encontré al usuario «{params.get('person', '')}»."}
+    payload: dict[str, Any] = {}
+    if (params.get("new_name") or "").strip():
+        payload["name"] = params["new_name"].strip()
+    if (params.get("new_email") or "").strip():
+        payload["email"] = params["new_email"].strip()
+    if params.get("role") in ("admin", "member"):
+        payload["role"] = params["role"]
+    if params.get("is_active") is not None and str(params.get("is_active")) != "":
+        payload["is_active"] = bool(params["is_active"])
+    if not payload:
+        return {"ok": False, "error": "no indicaste qué cambiar del usuario."}
+    try:
+        read = await admin_svc.update_user(db, target, AdminUserUpdate(**payload))
+    except admin_svc.EmailExists:
+        return {"ok": False, "error": "ese correo ya está en uso por otro usuario."}
+    return {"ok": True, "name": read.name, "email": read.email}
+
+
+async def execute_set_user_areas(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    if not _is_admin(user):
+        return {"ok": False, "error": "solo un administrador puede asignar áreas."}
+    from app.schemas.admin import AreaAssignment
+    from app.services import admin as admin_svc
+
+    target = await _resolve_user(db, params.get("person"))
+    if target is None:
+        return {"ok": False, "error": f"no encontré al usuario «{params.get('person', '')}»."}
+    names = params.get("area_names") or []
+    if isinstance(names, str):
+        names = [names]
+    assignments, resolved = [], []
+    for n in names:
+        area = await _resolve_area(db, n)
+        if area is not None:
+            assignments.append(AreaAssignment(area_id=area.id, area_role="member"))
+            resolved.append(area.name)
+    if not assignments:
+        return {"ok": False, "error": "no identifiqué áreas válidas para asignar."}
+    await admin_svc.set_user_areas(db, target, assignments)
+    return {"ok": True, "person": target.name, "areas": resolved}
