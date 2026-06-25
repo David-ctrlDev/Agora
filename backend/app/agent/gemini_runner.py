@@ -10,7 +10,7 @@ from typing import Any
 from google.genai import types
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent import tools
+from app.agent import actions, tools
 from app.agent.gemini_client import get_gemini_client
 from app.agent.llm import DevAgentLLM
 from app.core.config import settings
@@ -32,7 +32,12 @@ def _system(user: User) -> str:
         "por áreas o del portafolio (avance y proyectos en riesgo) usa areas_overview; para "
         "vencimientos y «qué se entrega pronto» usa upcoming_deliveries; para alertas y riesgos usa "
         "my_notifications; para el contenido de documentos, actas o transcripciones (incluidos los "
-        "importados de Drive) usa knowledge_search. Para las reuniones del usuario, su agenda o «qué "
+        "importados de Drive) usa knowledge_search. Google y Drive: google_status dice si hay conexión "
+        "(si algo falla por falta de conexión, dile que conecte Google; nunca intentes iniciar sesión "
+        "por él); search_drive busca archivos en su Drive; list_project_documents lista los documentos "
+        "de un proyecto; import_drive_to_project importa al proyecto los archivos de Drive que coincidan "
+        "con un término y los indexa (el servidor resuelve los archivos: tú solo das proyecto y término); "
+        "sync_project_drive re-sincroniza. Para las reuniones del usuario, su agenda o «qué "
         "reuniones tengo» (hoy, esta semana, este mes) usa my_meetings con el parámetro days "
         "adecuado (1, 7 o 30); si devuelve connected=false, dile que conecte su cuenta de Google. "
         "Para agendar una reunión de un proyecto «cuando todos coincidan» o «que respete la "
@@ -118,6 +123,7 @@ _ACTION_TOOLS = {
     "create_user",
     "update_user_admin",
     "set_user_areas",
+    "sync_project_drive",
 }
 
 _TASK_ITEM_SCHEMA = {
@@ -147,6 +153,11 @@ _FUNCTION_DECLARATIONS = [
     {"name": "find_meeting_slot", "description": "Mira la disponibilidad (free/busy de Calendar) de TODOS los miembros de un proyecto y propone el primer hueco común en horario laboral (8–17) de lunes a viernes, evitando el almuerzo (12–14). Úsala SIEMPRE antes de agendar una reunión «cuando todos estén libres» / «que coincida la disponibilidad». Devuelve start (ISO con zona), end, duration_minutes y attendees (los correos de los miembros). Después llama a create_meeting con ese when y esos attendees; no inventes el horario.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "days_ahead": {"type": "integer", "description": "Días hacia adelante a explorar (por defecto 7)."}}, "required": ["project_name"]}},
     {"name": "my_notifications", "description": "Alertas y notificaciones sin leer del usuario (riesgos detectados, resúmenes). Úsala para «tengo alertas», «qué riesgos hay» o «novedades».", "parameters": {"type": "object", "properties": {}}},
     {"name": "knowledge_search", "description": "Busca en los documentos/base de conocimiento de los proyectos del usuario, incluidos los archivos importados desde Drive. Úsala para preguntas sobre el contenido de actas, transcripciones, informes o documentos.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "google_status", "description": "Estado de la conexión de Google del usuario (si está conectado y con qué permisos). Úsala para «¿tengo Google conectado?» o cuando una acción de Drive/Calendar/Correo falle por falta de conexión.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "search_drive", "description": "Busca archivos y carpetas en el Drive del usuario por nombre/término (solo consulta, no importa nada). Úsala para «busca en mi Drive…», «¿tengo el archivo X?» o para localizar documentos antes de importarlos.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "list_project_documents", "description": "Lista los documentos vinculados a un proyecto (subidos, importados de Drive o generados), con su origen y fecha. Úsala para «qué documentos tiene el proyecto X».", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
+    {"name": "import_drive_to_project", "description": "Importa al proyecto los archivos de Drive que coincidan con la búsqueda y los indexa para que el agente pueda buscarlos (RAG). El servidor localiza los archivos por el término (no manejes IDs). Úsala para «importa del Drive el acta/los informes… al proyecto X». Requiere edición y Google conectado.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "query": {"type": "string", "description": "Nombre o término de los archivos a importar."}}, "required": ["project_name", "query"]}},
+    {"name": "sync_project_drive", "description": "Re-sincroniza con Google los documentos vinculados al proyecto (trae novedades). Úsala para «sincroniza el Drive/Google del proyecto X». Requiere edición y Google conectado.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "create_project", "description": "Crea un proyecto en un área del usuario.", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}}, "required": ["name"]}},
     {"name": "create_task", "description": "Crea UNA sola tarea dentro de un proyecto. Si vas a crear varias, usa create_tasks.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "project_name": {"type": "string"}, "assignee": {"type": "string", "description": "Nombre o correo del responsable, o 'mí' para el usuario actual."}}, "required": ["title"]}},
     {"name": "create_project_with_tasks", "description": "Crea un proyecto Y su listado completo de tareas en UNA sola confirmación. Úsala siempre que el usuario pida «crea un proyecto y sus tareas», un cronograma o un plan de trabajo, especialmente a partir de un acta o documento adjunto: extrae un nombre de proyecto y TODAS las tareas accionables de una vez (no las crees una por una).", "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "area_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["name", "tasks"]}},
@@ -336,6 +347,8 @@ def _map_params(name: str, args: dict[str, Any]) -> dict[str, Any]:
         return out
     if name == "set_user_areas":
         return {"person": args.get("person", ""), "area_names": list(args.get("area_names") or [])}
+    if name == "sync_project_drive":
+        return {"project_name": args.get("project_name", "")}
     return dict(args)
 
 
@@ -365,6 +378,8 @@ def _proposal_text(name: str, params: dict[str, Any]) -> str:
         "create_user": _dev.compose_create_user_proposal,
         "update_user_admin": _dev.compose_update_user_admin_proposal,
         "set_user_areas": _dev.compose_set_user_areas_proposal,
+        "import_drive": _dev.compose_import_drive_proposal,
+        "sync_project_drive": _dev.compose_sync_project_drive_proposal,
     }[name]
     return composer(params)
 
@@ -400,6 +415,12 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.list_areas(db, user)
     if name == "list_users":
         return await tools.list_users(db, user)
+    if name == "google_status":
+        return await tools.google_status(db, user)
+    if name == "search_drive":
+        return await tools.search_drive(db, user, args.get("query", ""))
+    if name == "list_project_documents":
+        return await tools.list_project_documents(db, user, args.get("project_name", ""))
     if name == "my_meetings":
         return await tools.my_meetings(db, user, days=int(args.get("days") or 7))
     if name == "find_meeting_slot":
@@ -476,6 +497,23 @@ async def run_turn(
                 "project_name": slot.get("project"),
             }
             return _proposal_text("create_meeting", params), {"type": "create_meeting", "params": params}
+        if name == "import_drive_to_project":
+            # El servidor resuelve los archivos de Drive (el agente no maneja IDs).
+            prep = await actions.prepare_import_drive(
+                db, user, args.get("project_name", ""), args.get("query", "")
+            )
+            if not prep.get("ok"):
+                contents.append(candidate.content)
+                contents.append(
+                    types.Content(
+                        role="tool",
+                        parts=[types.Part.from_function_response(name=name, response={"result": prep})],
+                    )
+                )
+                continue
+            params = dict(prep["params"])
+            params["titles"] = prep["titles"]
+            return _proposal_text("import_drive", params), {"type": "import_drive", "params": params}
         if name in _ACTION_TOOLS:
             params = _map_params(name, args)
             return _proposal_text(name, params), {"type": name, "params": params}

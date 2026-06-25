@@ -409,6 +409,71 @@ async def list_tasks(db: AsyncSession, user: User, project_name: str) -> dict[st
     }
 
 
+async def google_status(db: AsyncSession, user: User) -> dict[str, Any]:
+    """Estado de la conexión de Google del usuario (conectado y permisos/scopes)."""
+    from app.services import google as google_service
+
+    return await google_service.status(db, user)
+
+
+async def search_drive(db: AsyncSession, user: User, query: str) -> dict[str, Any]:
+    """Busca archivos/carpetas en el Drive del usuario (no importa nada, solo consulta)."""
+    from app.services import google as google_service
+
+    try:
+        files = await google_service.browse_drive(db, user, None, (query or None), True)
+    except google_service.GoogleNotConnected:
+        return {"connected": False, "error": "no tienes Google conectado.", "files": []}
+    except Exception:
+        return {"error": "no pude buscar en Drive (revisa la conexión de Google).", "files": []}
+    return {
+        "count": len(files),
+        "files": [
+            {
+                "title": f.get("title"),
+                "type": "carpeta" if f.get("is_folder") else "archivo",
+                "web_url": f.get("web_url"),
+                "modified_at": f.get("modified_at"),
+            }
+            for f in files[:50]
+        ],
+    }
+
+
+async def list_project_documents(db: AsyncSession, user: User, project_name: str) -> dict[str, Any]:
+    """Documentos vinculados a un proyecto (subidos, importados de Drive o generados)."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"error": "no tienes proyectos accesibles.", "documents": []}
+    rows = (
+        await db.execute(
+            select(Project).where(Project.id.in_(pids)).order_by(func.length(Project.name).desc())
+        )
+    ).scalars().all()
+    who = (project_name or "").strip().lower()
+    project = next((p for p in rows if who and who in p.name.lower()), None)
+    if project is None and len(rows) == 1:
+        project = rows[0]
+    if project is None:
+        return {"error": f"no identifiqué el proyecto «{project_name}».", "documents": []}
+    from app.services import knowledge as knowledge_service
+
+    docs = await knowledge_service.list_documents(db, project.id)
+    return {
+        "project": project.name,
+        "count": len(docs),
+        "documents": [
+            {
+                "title": d.title,
+                "source": d.source,
+                "mime_type": d.mime_type,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in docs
+        ],
+    }
+
+
 async def list_areas(db: AsyncSession, user: User) -> dict[str, Any]:
     """Lista las áreas (departamentos) de la organización con su nº de proyectos."""
     areas = (await db.execute(select(Area).order_by(Area.name))).scalars().all()

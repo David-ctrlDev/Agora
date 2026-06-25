@@ -413,6 +413,14 @@ async def confirm_action(db: AsyncSession, action: AgentAction) -> MessageRead:
         user = await db.get(User, action.user_id)
         result = await actions.execute_set_user_areas(db, user, action.params)
         text = _llm.compose_set_user_areas_result(result)
+    elif action.action_type == "import_drive":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_import_drive(db, user, action.params)
+        text = _llm.compose_import_drive_result(result)
+    elif action.action_type == "sync_project_drive":
+        user = await db.get(User, action.user_id)
+        result = await actions.execute_sync_project_drive(db, user, action.params)
+        text = _llm.compose_sync_project_drive_result(result)
     else:
         result = {"ok": False}
         text = "Acción no soportada."

@@ -446,6 +446,37 @@ class DevAgentLLM:
             return f"No pude asignar las áreas: {result.get('error', 'error desconocido')}"
         return f"✅ {result['person']} ahora pertenece a: {', '.join(result['areas'])}."
 
+    def compose_import_drive_proposal(self, args: dict[str, Any]) -> str:
+        titles = args.get("titles") or []
+        muestra = "\n".join(f"   – {t}" for t in titles[:12])
+        extra = f"\n   … y {len(titles) - 12} más" if len(titles) > 12 else ""
+        return (
+            "Voy a importar de Drive estos archivos al proyecto e indexarlos (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n"
+            f"• Archivos ({len(titles)}):\n{muestra}{extra}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_import_drive_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude importar de Drive: {result.get('error', 'error desconocido')}"
+        return (
+            f"✅ Importados {result['new']} documento(s) a «{result['project']}» "
+            f"({result['indexed']} indexado(s) para búsqueda)."
+        )
+
+    def compose_sync_project_drive_proposal(self, args: dict[str, Any]) -> str:
+        return (
+            "Voy a sincronizar con Google/Drive los documentos del proyecto (requiere tu confirmación):\n"
+            f"• Proyecto: {args.get('project_name') or '(no identificado)'}\n"
+            "Pulsa «Confirmar»."
+        )
+
+    def compose_sync_project_drive_result(self, result: dict[str, Any]) -> str:
+        if not result.get("ok"):
+            return f"No pude sincronizar: {result.get('error', 'error desconocido')}"
+        return f"✅ Sincronización completa en «{result['project']}»: {result['new']} documento(s) nuevo(s)."
+
     def compose_save_diagram_proposal(self, args: dict[str, Any]) -> str:
         return (
             "Voy a guardar este diagrama en la documentación del proyecto (requiere tu confirmación):\n"

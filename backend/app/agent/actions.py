@@ -861,3 +861,84 @@ async def execute_set_user_areas(db: AsyncSession, user: User, params: dict[str,
         return {"ok": False, "error": "no identifiqué áreas válidas para asignar."}
     await admin_svc.set_user_areas(db, target, assignments)
     return {"ok": True, "person": target.name, "areas": resolved}
+
+
+# ---------------------------------------------------------------------------
+# Google / Drive — importar y sincronizar documentos en un proyecto.
+# ---------------------------------------------------------------------------
+async def prepare_import_drive(db: AsyncSession, user: User, project_name: str, query: str) -> dict[str, Any]:
+    """Resuelve EN EL SERVIDOR los archivos de Drive que coinciden con la búsqueda,
+    para proponer su importación (el agente no maneja IDs de archivo)."""
+    from app.services import google as google_service
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, project_name)
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{project_name}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    try:
+        files = await google_service.browse_drive(db, user, None, (query or None), True)
+    except google_service.GoogleNotConnected:
+        return {"ok": False, "error": "no tienes Google conectado para leer Drive."}
+    except Exception:
+        return {"ok": False, "error": "no pude buscar en Drive (revisa la conexión de Google)."}
+    files = [f for f in files if f.get("external_id")]
+    if not files:
+        return {"ok": False, "error": f"no encontré en tu Drive archivos que coincidan con «{query}»."}
+    items = [
+        {
+            "external_id": f["external_id"],
+            "title": f.get("title"),
+            "mime_type": f.get("mime_type"),
+            "web_url": f.get("web_url"),
+            "modified_at": f.get("modified_at"),
+        }
+        for f in files
+    ]
+    return {
+        "ok": True,
+        "params": {"project_name": project.name, "project_id": project.id, "items": items},
+        "titles": [f.get("title") or "(sin nombre)" for f in files],
+    }
+
+
+async def execute_import_drive(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Importa a un proyecto los archivos de Drive ya resueltos y los indexa (RAG)."""
+    from app.services import google as google_service
+    from app.services import projects as projects_svc
+
+    project = await projects_svc.get_project(db, params.get("project_id"))
+    if project is None:
+        return {"ok": False, "error": "el proyecto ya no existe."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": "no tienes permiso de edición en ese proyecto."}
+    items = params.get("items") or []
+    if not items:
+        return {"ok": False, "error": "no hay archivos para importar."}
+    res = await google_service.import_drive_documents(db, user, project.id, items)
+    return {
+        "ok": True,
+        "project": project.name,
+        "new": res.get("new_documents", 0),
+        "indexed": res.get("indexed", 0),
+    }
+
+
+async def execute_sync_project_drive(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Re-sincroniza los documentos de Google/Drive vinculados al proyecto."""
+    from app.services import google as google_service
+    from app.services import projects as projects_svc
+
+    project = await _resolve_project(db, user, params.get("project_name"))
+    if project is None:
+        return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
+    if not await projects_svc.can_edit(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso de edición en «{project.name}»."}
+    try:
+        new = await google_service.sync_project(db, user, project.id, project.name)
+    except google_service.GoogleNotConnected:
+        return {"ok": False, "error": "no tienes Google conectado."}
+    except Exception:
+        return {"ok": False, "error": "no pude sincronizar con Google (revisa la conexión)."}
+    return {"ok": True, "project": project.name, "new": new}
