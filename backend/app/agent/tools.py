@@ -386,7 +386,7 @@ async def list_tasks(db: AsyncSession, user: User, project_name: str) -> dict[st
     ).scalars().all()
     who = (project_name or "").strip().lower()
     project = next((p for p in rows if who and who in p.name.lower()), None)
-    if project is None and len(rows) == 1:
+    if project is None and not who and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"error": f"no identifiqué el proyecto «{project_name}».", "tasks": []}
@@ -452,7 +452,7 @@ async def list_project_documents(db: AsyncSession, user: User, project_name: str
     ).scalars().all()
     who = (project_name or "").strip().lower()
     project = next((p for p in rows if who and who in p.name.lower()), None)
-    if project is None and len(rows) == 1:
+    if project is None and not who and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"error": f"no identifiqué el proyecto «{project_name}».", "documents": []}
@@ -475,8 +475,12 @@ async def list_project_documents(db: AsyncSession, user: User, project_name: str
 
 
 async def list_areas(db: AsyncSession, user: User) -> dict[str, Any]:
-    """Lista las áreas (departamentos) de la organización con su nº de proyectos."""
-    areas = (await db.execute(select(Area).order_by(Area.name))).scalars().all()
+    """Lista las áreas accesibles por el usuario con su nº de proyectos (admin: todas)."""
+    area_ids = await get_user_area_ids(db, user)  # None = admin (sin restricción)
+    stmt = select(Area).order_by(Area.name)
+    if area_ids is not None:
+        stmt = stmt.where(Area.id.in_(area_ids))
+    areas = (await db.execute(stmt)).scalars().all()
     out = []
     for a in areas:
         n = (
@@ -511,7 +515,7 @@ async def list_sprints(db: AsyncSession, user: User, project_name: str) -> dict[
     ).scalars().all()
     who = (project_name or "").strip().lower()
     project = next((p for p in rows if who and who in p.name.lower()), None)
-    if project is None and len(rows) == 1:
+    if project is None and not who and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"error": f"no identifiqué el proyecto «{project_name}».", "sprints": []}
@@ -546,7 +550,7 @@ async def list_project_members(db: AsyncSession, user: User, project_name: str) 
     ).scalars().all()
     who = (project_name or "").strip().lower()
     project = next((p for p in rows if who and who in p.name.lower()), None)
-    if project is None and len(rows) == 1:
+    if project is None and not who and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"error": f"no identifiqué el proyecto «{project_name}».", "members": []}
@@ -582,7 +586,7 @@ async def find_meeting_slot(
     ).scalars().all()
     who = (project_name or "").strip().lower()
     project = next((p for p in rows if who and who in p.name.lower()), None)
-    if project is None and len(rows) == 1:
+    if project is None and not who and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"found": False, "reason": f"no identifiqué el proyecto «{project_name}»."}

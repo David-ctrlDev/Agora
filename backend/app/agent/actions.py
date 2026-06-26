@@ -189,7 +189,7 @@ async def execute_create_task(db: AsyncSession, user: User, params: dict[str, An
     project = None
     if wanted:
         project = next((p for p in rows if wanted in _norm(p.name)), None)
-    if project is None and len(rows) == 1:
+    if project is None and not wanted and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
@@ -309,7 +309,7 @@ async def execute_create_tasks(db: AsyncSession, user: User, params: dict[str, A
     project = None
     if wanted:
         project = next((p for p in rows if wanted in _norm(p.name)), None)
-    if project is None and len(rows) == 1:
+    if project is None and not wanted and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
@@ -341,7 +341,7 @@ async def execute_save_diagram(db: AsyncSession, user: User, params: dict[str, A
     ).scalars().all()
     wanted = _norm(params.get("project_name") or "")
     project = next((p for p in rows if wanted and wanted in _norm(p.name)), None)
-    if project is None and len(rows) == 1:
+    if project is None and not wanted and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
@@ -386,7 +386,7 @@ async def execute_create_sprint(db: AsyncSession, user: User, params: dict[str, 
     ).scalars().all()
     wanted = _norm(params.get("project_name") or "")
     project = next((p for p in rows if wanted and wanted in _norm(p.name)), None)
-    if project is None and len(rows) == 1:
+    if project is None and not wanted and len(rows) == 1:
         project = rows[0]
     if project is None:
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
