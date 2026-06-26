@@ -1,9 +1,21 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.area import Area
 from app.models.user import User
 from app.models.user_area import UserArea
+
+
+def _auto_provision_allowed(email: str) -> bool:
+    """¿Se puede auto-crear esta cuenta? Solo si la auto-provisión está activada y el
+    correo pertenece al dominio permitido (la frontera de seguridad)."""
+    if not settings.google_auto_provision:
+        return False
+    hd = (settings.google_allowed_hd or "").strip().lower()
+    if not hd:
+        return False  # sin dominio configurado NO auto-creamos (no abrir a cualquiera)
+    return (email or "").strip().lower().endswith("@" + hd)
 
 
 async def accessible_areas(db: AsyncSession, user: User) -> list[tuple[Area, str]]:
@@ -39,15 +51,30 @@ async def resolve_google_user(
     name: str | None,
     avatar_url: str | None,
 ) -> User | None:
-    """Encuentra al usuario (por email o google_sub) tras autenticar con Google.
+    """Encuentra (o auto-crea) al usuario tras autenticar con Google.
 
-    Acceso restringido: solo usuarios ya creados y activos pueden entrar; no se
-    auto-crean cuentas. Devuelve None si no existe o está inactivo.
+    Si el correo pertenece al dominio permitido y no existe, se crea como 'member'
+    activo (auto-provisión). Un usuario DESACTIVADO por un admin no puede entrar.
+    Devuelve None si no existe y el dominio no permite auto-provisión.
     """
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
     if user is None and sub:
         user = (await db.execute(select(User).where(User.google_sub == sub))).scalar_one_or_none()
-    if user is None or not user.is_active:
+    if user is None:
+        if not _auto_provision_allowed(email):
+            return None
+        user = User(
+            email=email.strip().lower(),
+            name=name or email,
+            google_sub=sub,
+            avatar_url=avatar_url,
+            role="member",
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+        return user
+    if not user.is_active:
         return None
     if sub and not user.google_sub:
         user.google_sub = sub

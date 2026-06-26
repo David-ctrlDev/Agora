@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     # Login (Google OAuth, Fase 3)
     google_allowed_hd: str = "invesa.com"
+    # Auto-provisión: cualquier cuenta del dominio permitido entra (se crea como member
+    # en el primer login). Si es False, solo entran usuarios ya creados (lista blanca).
+    google_auto_provision: bool = True
     bootstrap_admin_emails: str = ""
 
     # Integraciones externas — proveedor "mock" (sin red) o "real" (con credenciales).
