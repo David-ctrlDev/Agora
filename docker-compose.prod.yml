@@ -4,7 +4,9 @@
 #
 # Diferencias clave vs. desarrollo:
 #   - Imágenes con target `runtime` (sin hot-reload, sin código montado).
-#   - El frontend (nginx) es el único expuesto (puerto 80) y proxya /api → backend.
+#   - El frontend (nginx propio de Ágora) es el único expuesto y proxya /api → backend.
+#     Puerto del host configurable con FRONTEND_PORT (por defecto 80); usa otro
+#     (p. ej. 8090) si otra app ya ocupa el :80 del servidor.
 #   - Postgres y backend NO publican puertos al host (solo red interna).
 #   - ENV=production y SEED_ON_START=false (no se siembran datos de ejemplo).
 #   - Requiere Docker Compose >= 2.24 (por `!reset`).
@@ -42,7 +44,7 @@ services:
     restart: always
     volumes: !reset []
     environment: !reset {}           # nginx no usa el proxy de Vite
-    ports: !override                 # reemplaza (no fusiona) el 5173 de dev por el 80
-      - "80:80"
+    ports: !override                 # reemplaza (no fusiona) el 5173 de dev
+      - "${FRONTEND_PORT:-80}:80"    # FRONTEND_PORT=8090 si el :80 ya está ocupado
     depends_on:
       - backend

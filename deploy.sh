@@ -19,7 +19,8 @@ set -euo pipefail
 # ─────────────────────────── CONFIG (ajusta a tu servidor) ───────────────────────────
 DEPLOY_HOST="root@CHANGE-ME"          # p. ej. root@mi-servidor  (usuario@host SSH)
 DEPLOY_PATH="/root/agora"             # carpeta del proyecto en el servidor
-HEALTHCHECK_PATH="/api/health"        # nginx (80) proxya /api → backend
+HEALTHCHECK_PORT="8090"               # = FRONTEND_PORT del .env (puerto del nginx de Ágora)
+HEALTHCHECK_PATH="/api/health"        # el nginx de Ágora proxya /api → backend
 DB_CONTAINER="agora_postgres"         # = container_name del servicio db en prod
 DB_USER="agora"                       # = POSTGRES_USER del .env de producción
 DB_NAME="agora"                       # = POSTGRES_DB del .env de producción
@@ -96,7 +97,7 @@ docker compose ${COMPOSE_FILES[*]} up -d
 EOF
   info "Esperando healthcheck..."
   for _ in $(seq 1 30); do
-    remote "curl -fsS --max-time 5 http://localhost${HEALTHCHECK_PATH}" >/dev/null 2>&1 && { ok "Responde tras rollback"; exit 0; }
+    remote "curl -fsS --max-time 5 http://localhost:${HEALTHCHECK_PORT}${HEALTHCHECK_PATH}" >/dev/null 2>&1 && { ok "Responde tras rollback"; exit 0; }
     sleep 2
   done
   die "NO responde tras rollback. Revisa:\n  ssh ${DEPLOY_HOST} 'cd ${DEPLOY_PATH} && docker compose ${COMPOSE_FILES[*]} logs --tail=50'"
@@ -203,10 +204,10 @@ EOF
 ok "Deploy aplicado"
 
 # ──────────────────────── HEALTHCHECK ────────────────────────
-info "Sondeando http://localhost${HEALTHCHECK_PATH} (timeout ${HEALTHCHECK_TIMEOUT}s)..."
+info "Sondeando http://localhost:${HEALTHCHECK_PORT}${HEALTHCHECK_PATH} (timeout ${HEALTHCHECK_TIMEOUT}s)..."
 START=$(date +%s)
 while true; do
-  if remote "curl -fsS --max-time 5 http://localhost${HEALTHCHECK_PATH}" >/dev/null 2>&1; then
+  if remote "curl -fsS --max-time 5 http://localhost:${HEALTHCHECK_PORT}${HEALTHCHECK_PATH}" >/dev/null 2>&1; then
     ok "Healthcheck OK ($(( $(date +%s) - START ))s)"; break
   fi
   if (( $(date +%s) - START > HEALTHCHECK_TIMEOUT )); then
