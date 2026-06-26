@@ -114,7 +114,7 @@ async def add_member(
     project = await _accessible_project(project_id, user, db)
     if not await svc.can_edit(db, user, project):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permiso")
-    await svc.add_member(db, project_id, payload.user_id, payload.role)
+    await svc.add_member(db, project_id, payload.user_id, payload.role, actor=user)
     return await svc.list_members(db, project_id)
 
 

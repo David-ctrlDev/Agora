@@ -498,7 +498,17 @@ class DevAgentLLM:
 
     def compose_email_result(self, result: dict[str, Any]) -> str:
         to = ", ".join(result.get("to", [])) or "(sin destinatario)"
-        return f"✅ Correo enviado (simulado) a {to} — asunto: «{result['subject']}»."
+        if result.get("sent"):
+            return f"✅ Correo enviado a {to} — asunto: «{result['subject']}»."
+        if result.get("reason") == "google_no_conectado":
+            return (
+                f"No pude enviar el correo a {to}: necesitas conectar tu cuenta de Google "
+                f"(asunto: «{result['subject']}»)."
+            )
+        return (
+            f"Correo registrado pero no enviado (Google en modo prueba). "
+            f"Para: {to} — asunto: «{result['subject']}»."
+        )
 
     def compose_project_result(self, result: dict[str, Any]) -> str:
         if not result.get("ok"):

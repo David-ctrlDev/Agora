@@ -98,12 +98,21 @@ async def execute_create_meeting(db: AsyncSession, user: User, params: dict[str,
     }
 
 
-def execute_send_email(params: dict[str, Any]) -> dict[str, Any]:
-    # Outbox de desarrollo: no se envía nada real; se registra para auditoría.
+async def execute_send_email(db: AsyncSession, user: User, params: dict[str, Any]) -> dict[str, Any]:
+    """Envía el correo COMO el usuario (su Gmail). Sin Google conectado o en mock, no
+    envía de verdad pero queda registrado (best-effort, no rompe el flujo)."""
+    from app.services import google as google_service
+
+    to = params.get("to", [])
+    subject = params.get("subject", "")
+    body = params.get("body", "")
+    result = await google_service.send_email(db, user, to, subject, body)
     return {
-        "to": params.get("to", []),
-        "subject": params.get("subject", ""),
-        "body": params.get("body", ""),
+        "to": to,
+        "subject": subject,
+        "body": body,
+        "sent": result.get("sent", False),
+        "reason": result.get("reason"),
         "sent_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -200,6 +209,7 @@ async def execute_create_task(db: AsyncSession, user: User, params: dict[str, An
         db,
         project.id,
         TaskCreate(title=params.get("title", "Nueva tarea"), assignee_id=assignee_id),
+        actor=user,
     )
     return {
         "ok": True,
@@ -257,6 +267,7 @@ async def _create_tasks_in(
                 assignee_id=assignee_id,
                 due_date=_parse_task_due(data.get("due_date")),
             ),
+            actor=user,
         )
         created.append(task.title)
     # Únicos preservando orden.
@@ -466,7 +477,7 @@ async def execute_update_task(db: AsyncSession, user: User, params: dict[str, An
         fields["description"] = params["description"]
     if not fields:
         fields["status"] = "done"  # compat: «marca la tarea como hecha»
-    updated = await tasks_svc.update_task(db, task, TaskUpdate(**fields))
+    updated = await tasks_svc.update_task(db, task, TaskUpdate(**fields), actor=user)
     return {
         "ok": True,
         "title": updated.title,
@@ -536,7 +547,7 @@ async def execute_assign_task(db: AsyncSession, user: User, params: dict[str, An
         ).scalar_one_or_none()
     if assignee is None:
         return {"ok": False, "error": f"no encontré al usuario «{params.get('assignee', '')}»."}
-    await tasks_svc.update_task(db, task, TaskUpdate(assignee_id=assignee.id))
+    await tasks_svc.update_task(db, task, TaskUpdate(assignee_id=assignee.id), actor=user)
     return {"ok": True, "title": task.title, "assignee": assignee.name, "project": project.name}
 
 
@@ -651,7 +662,7 @@ async def execute_add_project_member(db: AsyncSession, user: User, params: dict[
     role = (params.get("role") or "editor").strip().lower()
     if role not in ("owner", "editor", "viewer"):
         role = "editor"
-    await projects_svc.add_member(db, project.id, target.id, role)
+    await projects_svc.add_member(db, project.id, target.id, role, actor=user)
     return {"ok": True, "project": project.name, "person": target.name, "role": role}
 
 

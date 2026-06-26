@@ -436,6 +436,24 @@ async def free_busy(
     return {e: [] for e in cleaned}
 
 
+async def send_email(db: AsyncSession, user: User, to: list[str], subject: str, body: str) -> dict:
+    """Envía un correo COMO el usuario (su Gmail). Best-effort: devuelve sent=False si
+    no hay Google conectado o el proveedor es mock (no lanza, para no romper el flujo)."""
+    clean_to = [t.strip() for t in to if t and t.strip()]
+    if not clean_to:
+        return {"sent": False, "reason": "sin destinatarios"}
+    if settings.google_provider == "real":
+        access = await get_access_token(db, user)
+        if not access:
+            return {"sent": False, "reason": "google_no_conectado", "to": clean_to}
+        try:
+            await real_api.send_email(access, clean_to, subject, body)
+            return {"sent": True, "to": clean_to}
+        except Exception:
+            return {"sent": False, "reason": "error_envio", "to": clean_to}
+    return {"sent": False, "reason": "mock", "to": clean_to}
+
+
 async def list_documents(db: AsyncSession, project_id: int) -> list[GoogleDocument]:
     result = await db.execute(
         select(GoogleDocument)

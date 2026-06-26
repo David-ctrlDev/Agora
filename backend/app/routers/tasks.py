@@ -49,7 +49,7 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ) -> TaskRead:
     await _project_with_access(project_id, user, db, edit=True)
-    task = await svc.create_task(db, project_id, payload)
+    task = await svc.create_task(db, project_id, payload, actor=user)
     await audit.log(
         db,
         project_id=project_id,
@@ -74,7 +74,7 @@ async def update_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
     await _project_with_access(task.project_id, user, db, edit=True)
     old_status, old_assignee, old_sprint = task.status, task.assignee_id, task.sprint_id
-    updated = await svc.update_task(db, task, payload)
+    updated = await svc.update_task(db, task, payload, actor=user)
     changes = []
     if updated.status != old_status:
         changes.append(f"estado {old_status}→{updated.status}")

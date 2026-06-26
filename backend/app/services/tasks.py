@@ -53,7 +53,9 @@ async def _single_read(db: AsyncSession, task: Task) -> TaskRead:
     return _to_read(task, assignee.name if assignee else None)
 
 
-async def create_task(db: AsyncSession, project_id: int, payload: TaskCreate) -> TaskRead:
+async def create_task(
+    db: AsyncSession, project_id: int, payload: TaskCreate, actor: User | None = None
+) -> TaskRead:
     task = Task(
         project_id=project_id,
         title=payload.title.strip(),
@@ -68,11 +70,16 @@ async def create_task(db: AsyncSession, project_id: int, payload: TaskCreate) ->
     db.add(task)
     await db.commit()
     await db.refresh(task)
+    await _notify_assignment(db, task, actor, previous_assignee=None)
     return await _single_read(db, task)
 
 
-async def update_task(db: AsyncSession, task: Task, payload: TaskUpdate) -> TaskRead:
-    for key, value in payload.model_dump(exclude_unset=True).items():
+async def update_task(
+    db: AsyncSession, task: Task, payload: TaskUpdate, actor: User | None = None
+) -> TaskRead:
+    previous_assignee = task.assignee_id
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
         setattr(task, key, value)
     if task.status == "done" and task.completed_at is None:
         task.completed_at = datetime.now(timezone.utc)
@@ -80,7 +87,25 @@ async def update_task(db: AsyncSession, task: Task, payload: TaskUpdate) -> Task
         task.completed_at = None
     await db.commit()
     await db.refresh(task)
+    if "assignee_id" in data:
+        await _notify_assignment(db, task, actor, previous_assignee=previous_assignee)
     return await _single_read(db, task)
+
+
+async def _notify_assignment(
+    db: AsyncSession, task: Task, actor: User | None, previous_assignee: int | None
+) -> None:
+    """Avisa al nuevo responsable (in-app + correo del actor). Best-effort."""
+    if actor is None or not task.assignee_id:
+        return
+    if task.assignee_id == previous_assignee or task.assignee_id == actor.id:
+        return
+    from app.services import notifications as notif
+
+    assignee = await db.get(User, task.assignee_id)
+    project = await db.get(Project, task.project_id)
+    if assignee is not None and project is not None:
+        await notif.notify_task_assigned(db, actor, assignee, task.title, project)
 
 
 async def delete_task(db: AsyncSession, task: Task) -> None:

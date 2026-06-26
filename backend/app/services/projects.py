@@ -152,13 +152,24 @@ async def list_members(db: AsyncSession, project_id: int) -> list[ProjectMemberR
     ]
 
 
-async def add_member(db: AsyncSession, project_id: int, user_id: int, role: str) -> None:
+async def add_member(
+    db: AsyncSession, project_id: int, user_id: int, role: str, actor: User | None = None
+) -> None:
     member = await db.get(ProjectMember, {"project_id": project_id, "user_id": user_id})
+    is_new = member is None
     if member is not None:
         member.role = role
     else:
         db.add(ProjectMember(project_id=project_id, user_id=user_id, role=role))
     await db.commit()
+    # Avisa al nuevo miembro (in-app + correo del actor). Solo en alta nueva.
+    if is_new and actor is not None and user_id != actor.id:
+        from app.services import notifications as notif
+
+        member_user = await db.get(User, user_id)
+        project = await db.get(Project, project_id)
+        if member_user is not None and project is not None:
+            await notif.notify_project_member_added(db, actor, member_user, project, role)
 
 
 async def remove_member(db: AsyncSession, project_id: int, user_id: int) -> None:

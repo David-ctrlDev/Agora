@@ -61,6 +61,63 @@ async def _emit(
     return True
 
 
+async def _create_notification(
+    db: AsyncSession, user_id: int, project: Project, ntype: str, title: str, body: str,
+    severity: str = "info",
+) -> None:
+    db.add(
+        Notification(
+            user_id=user_id, area_id=project.area_id, project_id=project.id,
+            type=ntype, title=title, body=body, severity=severity,
+        )
+    )
+    await db.commit()
+
+
+async def notify_task_assigned(
+    db: AsyncSession, actor: User | None, assignee: User | None, task_title: str, project: Project
+) -> None:
+    """Avisa al responsable de una tarea recién asignada: in-app + correo (del actor)."""
+    if assignee is None or actor is None or assignee.id == actor.id:
+        return
+    await _create_notification(
+        db, assignee.id, project, "task_assigned",
+        f"Nueva tarea asignada: {task_title}",
+        f"{actor.name} te asignó la tarea «{task_title}» en el proyecto «{project.name}».",
+    )
+    if assignee.email:
+        from app.services import google as google_service
+
+        await google_service.send_email(
+            db, actor, [assignee.email],
+            f"[Ágora] Te asignaron una tarea: {task_title}",
+            f"Hola {assignee.name},\n\n{actor.name} te asignó la tarea «{task_title}» "
+            f"en el proyecto «{project.name}».\n\nIngresa a Ágora para verla.\n",
+        )
+
+
+async def notify_project_member_added(
+    db: AsyncSession, actor: User | None, member: User | None, project: Project, role: str = "editor"
+) -> None:
+    """Avisa a quien fue agregado a un proyecto: in-app + correo (del actor)."""
+    if member is None or actor is None or member.id == actor.id:
+        return
+    await _create_notification(
+        db, member.id, project, "project_member_added",
+        f"Te agregaron al proyecto: {project.name}",
+        f"{actor.name} te agregó al proyecto «{project.name}» como {role}.",
+    )
+    if member.email:
+        from app.services import google as google_service
+
+        await google_service.send_email(
+            db, actor, [member.email],
+            f"[Ágora] Te agregaron al proyecto: {project.name}",
+            f"Hola {member.name},\n\n{actor.name} te agregó al proyecto «{project.name}» "
+            f"como {role}.\n\nIngresa a Ágora para verlo.\n",
+        )
+
+
 async def _count(db: AsyncSession, *conditions) -> int:
     value = (await db.execute(select(func.count(Task.id)).where(*conditions))).scalar()
     return int(value or 0)
