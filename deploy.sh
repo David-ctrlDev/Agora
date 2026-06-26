@@ -177,10 +177,15 @@ DUMP_TS="$(date +%Y%m%d_%H%M)"
 remote_sh <<EOF
 set -euo pipefail
 mkdir -p "$BACKUPS_PATH_REMOTE"
-docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "${BACKUPS_PATH_REMOTE}/postgres_${DUMP_TS}.sql.gz"
-ls -1t "${BACKUPS_PATH_REMOTE}"/postgres_*.sql.gz | tail -n +$((KEEP_PREDEPLOY_DUMPS + 1)) | xargs -r rm
+if docker inspect "$DB_CONTAINER" >/dev/null 2>&1; then
+  docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "${BACKUPS_PATH_REMOTE}/postgres_${DUMP_TS}.sql.gz"
+  ls -1t "${BACKUPS_PATH_REMOTE}"/postgres_*.sql.gz | tail -n +$((KEEP_PREDEPLOY_DUMPS + 1)) | xargs -r rm
+  echo "[deploy] respaldo: ${BACKUPS_PATH_REMOTE}/postgres_${DUMP_TS}.sql.gz"
+else
+  echo "[deploy] primer deploy: no hay BD previa, se omite el respaldo."
+fi
 EOF
-ok "Dump: ${BACKUPS_PATH_REMOTE}/postgres_${DUMP_TS}.sql.gz"
+ok "Respaldo pre-deploy listo (se omite en el primer deploy)."
 
 # ──────────────────────── UPLOAD (imágenes + compose) ────────────────────────
 info "Subiendo ${TAR_SIZE} + archivos compose..."
