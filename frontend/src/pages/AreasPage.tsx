@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { createArea, listAreas } from "../api/areas";
 import { PROJECT_STATUS, listProjects } from "../api/projects";
 import { useMe } from "../auth/useAuth";
+import AreaCatalog from "../components/AreaCatalog";
 import { Badge, Button, Card, Input, PageHeader, Spinner } from "../components/ui";
 
 export default function AreasPage() {
@@ -154,6 +155,8 @@ export default function AreasPage() {
           );
         })}
       </section>
+
+      <AreaCatalog />
     </div>
   );
 }
