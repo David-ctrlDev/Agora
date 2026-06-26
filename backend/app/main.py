@@ -5,6 +5,7 @@ from app.routers import (
     admin,
     agent,
     analytics,
+    area_requests,
     areas,
     audit,
     auth,
@@ -24,6 +25,7 @@ app = FastAPI(title=settings.app_name)
 
 app.include_router(auth.router)
 app.include_router(areas.router)
+app.include_router(area_requests.router)
 app.include_router(projects.router)
 app.include_router(tasks.router)
 app.include_router(comments.router)
