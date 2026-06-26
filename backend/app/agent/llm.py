@@ -242,10 +242,14 @@ class DevAgentLLM:
         )
 
     def compose_email_proposal(self, args: dict[str, Any]) -> str:
-        to = ", ".join(args["to"]) if args["to"] else "(sin destinatario)"
+        recips = args.get("recipients") or args.get("to") or []
+        to = ", ".join(recips) if recips else "(sin destinatario)"
+        body = (args.get("body") or "").strip()
+        preview = (body[:400] + "…") if len(body) > 400 else body
+        cuerpo = f"• Mensaje:\n{preview}\n" if preview else ""
         return (
             "Voy a enviar este correo (requiere tu confirmación):\n"
-            f"• Para: {to}\n• Asunto: {args['subject']}\n"
+            f"• Para: {to}\n• Asunto: {args.get('subject', '')}\n{cuerpo}"
             "Pulsa «Confirmar» para enviarlo."
         )
 

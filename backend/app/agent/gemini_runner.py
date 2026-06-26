@@ -37,7 +37,12 @@ def _system(user: User) -> str:
         "por él); search_drive busca archivos en su Drive; list_project_documents lista los documentos "
         "de un proyecto; import_drive_to_project importa al proyecto los archivos de Drive que coincidan "
         "con un término y los indexa (el servidor resuelve los archivos: tú solo das proyecto y término); "
-        "sync_project_drive re-sincroniza. Para las reuniones del usuario, su agenda o «qué "
+        "sync_project_drive re-sincroniza. Para REDACTAR Y ENVIAR un correo usa send_email: tú escribes "
+        "el asunto y el cuerpo (claros y profesionales) a partir de lo que pida el usuario, e indicas "
+        "los destinatarios por nombre (to_people) o por proyecto (to_project = todos sus miembros); el "
+        "servidor resuelve los correos reales, así que NO inventes ni teclees direcciones salvo que el "
+        "usuario te las dé. El correo se envía desde el Gmail del usuario (requiere Google conectado) y "
+        "pide confirmación. Para las reuniones del usuario, su agenda o «qué "
         "reuniones tengo» (hoy, esta semana, este mes) usa my_meetings con el parámetro days "
         "adecuado (1, 7 o 30); si devuelve connected=false, dile que conecte su cuenta de Google. "
         "Para agendar una reunión de un proyecto «cuando todos coincidan» o «que respete la "
@@ -164,7 +169,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "create_tasks", "description": "Crea VARIAS tareas a la vez (lote) en un proyecto que YA existe. Úsala cuando el usuario pida añadir un listado/cronograma de tareas a un proyecto existente (no las crees una por una).", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "tasks": {"type": "array", "items": _TASK_ITEM_SCHEMA}}, "required": ["tasks"]}},
     {"name": "create_meeting", "description": "Crea una reunión con enlace de Meet e invitados. Para reuniones de un proyecto «cuando todos estén libres», llama antes a find_meeting_slot y pasa aquí su start como when, sus attendees y el mismo duration_minutes.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}, "description": "Correos de los invitados."}, "when": {"type": "string", "description": "Fecha/hora ISO 8601 (idealmente el start que devuelve find_meeting_slot, con zona horaria)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "project_name": {"type": "string", "description": "Proyecto al que pertenece la reunión, para enlazarla (opcional)."}}, "required": ["title"]}},
     {"name": "schedule_meeting", "description": "Agenda una reunión de un proyecto EN EL PRIMER HUECO COMÚN de todos sus miembros (el servidor calcula el horario con free/busy y usa como asistentes a los miembros reales del proyecto). Úsala para «reúnenos cuando todos coincidan / respetando la disponibilidad». Es determinista: no inventes ni pases tú la hora ni los asistentes; solo el proyecto, la duración y, si quieres, el título. Devuelve la reunión lista para confirmar.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}, "title": {"type": "string", "description": "Título de la reunión (opcional)."}, "duration_minutes": {"type": "integer", "description": "Duración en minutos (por defecto 60)."}, "days_ahead": {"type": "integer", "description": "Días hacia adelante a explorar (por defecto 7)."}}, "required": ["project_name"]}},
-    {"name": "send_email", "description": "Envía un correo de notificación.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["subject"]}},
+    {"name": "send_email", "description": "Redacta y envía un correo COMO el usuario actual (desde su Gmail). TÚ redactas el asunto y el cuerpo (claros y profesionales) según lo que pida el usuario. Indica destinatarios preferentemente por nombre (to_people) o por proyecto (to_project = todos sus miembros); el servidor resuelve los correos reales desde la base, así que NO teclees direcciones salvo que el usuario te las dé explícitamente (en 'to'). Requiere Google conectado.", "parameters": {"type": "object", "properties": {"to": {"type": "array", "items": {"type": "string"}, "description": "Correos explícitos, solo si el usuario los da."}, "to_people": {"type": "array", "items": {"type": "string"}, "description": "Nombres (o correos) de personas; el servidor los resuelve."}, "to_project": {"type": "string", "description": "Nombre de un proyecto: se envía a TODOS sus miembros."}, "subject": {"type": "string"}, "body": {"type": "string", "description": "Cuerpo del correo, redactado por ti."}}, "required": ["subject", "body"]}},
     {"name": "update_task", "description": "Edita una tarea existente (la identifica por su título). Puede cambiar el estado, la prioridad, la fecha de entrega, el título o la descripción — pasa solo los campos a cambiar. Para cambiar el RESPONSABLE usa assign_task.", "parameters": {"type": "object", "properties": {"title": {"type": "string", "description": "Título actual de la tarea a editar."}, "status": {"type": "string", "enum": ["todo", "in_progress", "blocked", "done"]}, "priority": {"type": "string", "enum": ["low", "medium", "high"]}, "due_date": {"type": "string", "description": "Nueva fecha de entrega ISO YYYY-MM-DD."}, "new_title": {"type": "string", "description": "Nuevo título (si se renombra)."}, "description": {"type": "string", "description": "Nueva descripción."}}, "required": ["title"]}},
     {"name": "assign_task", "description": "Asigna/reasigna una tarea a una persona (nombre o correo, o «mí»).", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "assignee": {"type": "string"}}, "required": ["title", "assignee"]}},
     {"name": "delete_task", "description": "Elimina una tarea (la identifica por su título). Irreversible; requiere permiso de edición en el proyecto.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}},
@@ -514,6 +519,19 @@ async def run_turn(
             params = dict(prep["params"])
             params["titles"] = prep["titles"]
             return _proposal_text("import_drive", params), {"type": "import_drive", "params": params}
+        if name == "send_email":
+            # Resuelve destinatarios EN EL SERVIDOR (por nombre/proyecto); el agente no teclea correos.
+            prep = await actions.prepare_email(db, user, args)
+            if not prep.get("ok"):
+                contents.append(candidate.content)
+                contents.append(
+                    types.Content(
+                        role="tool",
+                        parts=[types.Part.from_function_response(name=name, response={"result": prep})],
+                    )
+                )
+                continue
+            return _proposal_text("send_email", prep["params"]), {"type": "send_email", "params": prep["params"]}
         if name in _ACTION_TOOLS:
             params = _map_params(name, args)
             return _proposal_text(name, params), {"type": name, "params": params}

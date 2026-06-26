@@ -953,3 +953,46 @@ async def execute_sync_project_drive(db: AsyncSession, user: User, params: dict[
     except Exception:
         return {"ok": False, "error": "no pude sincronizar con Google (revisa la conexión)."}
     return {"ok": True, "project": project.name, "new": new}
+
+
+async def prepare_email(db: AsyncSession, user: User, args: dict[str, Any]) -> dict[str, Any]:
+    """Resuelve EN EL SERVIDOR los destinatarios de un correo (por correo, por nombre
+    o por proyecto) para proponer el envío. El agente no teclea las direcciones."""
+    from app.services import scheduling
+
+    seen: set[str] = set()
+    to_list: list[str] = []
+    labels: list[str] = []
+
+    def _add(email: str | None, name: str | None = None) -> None:
+        email = (email or "").strip()
+        if "@" not in email or email.lower() in seen:
+            return
+        seen.add(email.lower())
+        to_list.append(email)
+        labels.append(f"{name} <{email}>" if name else email)
+
+    for e in args.get("to") or []:
+        _add(e)
+    for who in args.get("to_people") or []:
+        u = await _resolve_user(db, who)
+        if u is not None:
+            _add(u.email, u.name)
+    pname = (args.get("to_project") or "").strip()
+    if pname:
+        project = await _resolve_project(db, user, pname)
+        if project is None:
+            return {"ok": False, "error": f"no identifiqué el proyecto «{pname}» (o no tienes acceso)."}
+        for em in await scheduling.member_emails(db, project):
+            _add(em)
+
+    subject = (args.get("subject") or "").strip()
+    body = args.get("body") or ""
+    if not to_list:
+        return {"ok": False, "error": "no identifiqué destinatarios. Dime a quién: nombres, correos o el proyecto."}
+    if not subject:
+        return {"ok": False, "error": "falta el asunto del correo."}
+    return {
+        "ok": True,
+        "params": {"to": to_list, "subject": subject, "body": body, "recipients": labels},
+    }
