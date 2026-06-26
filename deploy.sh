@@ -17,8 +17,8 @@
 set -euo pipefail
 
 # ─────────────────────────── CONFIG (ajusta a tu servidor) ───────────────────────────
-DEPLOY_HOST="root@CHANGE-ME"          # p. ej. root@mi-servidor  (usuario@host SSH)
-DEPLOY_PATH="/root/agora"             # carpeta del proyecto en el servidor
+DEPLOY_HOST="root@mimir"          # p. ej. root@mi-servidor  (usuario@host SSH)
+DEPLOY_PATH="/root/Agora"             # carpeta del proyecto en el servidor
 HEALTHCHECK_PORT="8090"               # = FRONTEND_PORT del .env (puerto del nginx de Ágora)
 HEALTHCHECK_PATH="/api/health"        # el nginx de Ágora proxya /api → backend
 DB_CONTAINER="agora_postgres"         # = container_name del servicio db en prod
