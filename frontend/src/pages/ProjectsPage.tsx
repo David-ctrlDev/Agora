@@ -47,6 +47,7 @@ export default function ProjectsPage() {
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
 
+  const [scope, setScope] = useState<"mine" | "area">("mine");
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<number | "">("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -100,6 +101,7 @@ export default function ProjectsPage() {
     const q = search.trim().toLowerCase();
     return projects.filter(
       (p) =>
+        (scope === "area" || p.is_mine) &&
         (!q ||
           p.name.toLowerCase().includes(q) ||
           (p.description ?? "").toLowerCase().includes(q)) &&
@@ -109,7 +111,9 @@ export default function ProjectsPage() {
         (!dateFrom || (p.due_date != null && p.due_date >= dateFrom)) &&
         (!dateTo || (p.due_date != null && p.due_date <= dateTo)),
     );
-  }, [projects, search, areaFilter, statusFilter, ownerFilter, dateFrom, dateTo]);
+  }, [projects, scope, search, areaFilter, statusFilter, ownerFilter, dateFrom, dateTo]);
+
+  const mineCount = useMemo(() => projects.filter((p) => p.is_mine).length, [projects]);
 
   return (
     <div className="space-y-6">
@@ -180,6 +184,22 @@ export default function ProjectsPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
+        <div className="flex h-10 shrink-0 overflow-hidden rounded-lg border border-slate-300 text-sm font-medium">
+          <button
+            type="button"
+            onClick={() => setScope("mine")}
+            className={`px-3 transition ${scope === "mine" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+          >
+            Míos{mineCount ? ` (${mineCount})` : ""}
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope("area")}
+            className={`border-l border-slate-300 px-3 transition ${scope === "area" ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+          >
+            Del área
+          </button>
+        </div>
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input

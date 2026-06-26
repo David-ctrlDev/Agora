@@ -37,6 +37,7 @@ export interface Project extends RoadmapFields {
   updated_at: string;
   area_name: string | null;
   owner_name: string | null;
+  is_mine: boolean;
 }
 
 export interface ProjectCreate {

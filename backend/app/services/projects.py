@@ -61,7 +61,19 @@ async def list_projects(db: AsyncSession, user: User) -> list[ProjectRead]:
         stmt = stmt.where(or_(Project.area_id.in_(area_ids), Project.id.in_(member_pids)))
     stmt = stmt.order_by(Project.created_at.desc())
     rows = (await db.execute(stmt)).all()
-    return [_to_read(p, area_name, owner_name) for (p, area_name, owner_name) in rows]
+    my_member_ids = set(
+        (
+            await db.execute(
+                select(ProjectMember.project_id).where(ProjectMember.user_id == user.id)
+            )
+        ).scalars().all()
+    )
+    out: list[ProjectRead] = []
+    for (p, area_name, owner_name) in rows:
+        read = _to_read(p, area_name, owner_name)
+        read.is_mine = p.owner_id == user.id or p.id in my_member_ids
+        out.append(read)
+    return out
 
 
 async def get_project(db: AsyncSession, project_id: int) -> Project | None:

@@ -62,6 +62,7 @@ class ProjectRead(RoadmapFields):
     updated_at: datetime
     area_name: str | None = None
     owner_name: str | None = None
+    is_mine: bool = False  # el usuario actual es dueño o miembro del proyecto
 
 
 class ProjectMemberRead(BaseModel):
