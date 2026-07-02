@@ -30,7 +30,8 @@ def _system(user: User) -> str:
         "responsable, estado, avance % y fecha de entrega). Para una ficha a fondo de UN proyecto "
         "—incluido su ROI, costes, beneficios, sprints y fechas— usa project_details. Para el estado "
         "por áreas o del portafolio (avance y proyectos en riesgo) usa areas_overview; para "
-        "vencimientos y «qué se entrega pronto» usa upcoming_deliveries; para alertas y riesgos usa "
+        "vencimientos y «qué se entrega pronto» usa upcoming_deliveries; para «qué proyectos o tareas "
+        "NUEVAS se han creado» o «qué se ha asignado y a quién últimamente» usa recent_created; para alertas y riesgos usa "
         "my_notifications; para el contenido de documentos, actas o transcripciones (incluidos los "
         "importados de Drive) usa knowledge_search. Google y Drive: google_status dice si hay conexión "
         "(si algo falla por falta de conexión, dile que conecte Google; nunca intentes iniciar sesión "
@@ -150,6 +151,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "tasks_by_assignee", "description": "Tareas asignadas a una persona (por nombre o correo).", "parameters": {"type": "object", "properties": {"person": {"type": "string"}}, "required": ["person"]}},
     {"name": "list_tasks", "description": "Lista TODAS las tareas de un proyecto (título, estado, prioridad, responsable y fecha). Úsala para «qué tareas tiene el proyecto X», «lístame las tareas de X» o para ver el tablero de un proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "recent_activity", "description": "Actividad reciente del repositorio vinculado a los proyectos.", "parameters": {"type": "object", "properties": {}}},
+    {"name": "recent_created", "description": "Proyectos y tareas creados más recientemente, con su área/dueño y a quién se asignó cada tarea. Úsala para «qué proyectos o tareas nuevas se han creado», «qué se ha asignado y a quién últimamente» o «novedades recientes».", "parameters": {"type": "object", "properties": {}}},
     {"name": "project_summary", "description": "Resumen de un proyecto concreto, por su nombre.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "project_details", "description": "Ficha detallada de un proyecto por su nombre: estado, líder, avance %, categoría, criticidad, fechas, tareas, sprints y un ROI de dos lados — el proceso que lo hace (ejecutor: coste, esfuerzo en horas, equipo, complejidad, recursos) y el proceso para el que se hace (beneficiario: área, beneficio, horas ahorradas/mes y año, personas impactadas, reducción de riesgo, valor estratégico). Úsala para preguntas a fondo sobre un proyecto, su ROI, su impacto o su rentabilidad.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "areas_overview", "description": "Panorama por área (nº de proyectos, % de avance y cuántos en riesgo) y totales globales accesibles. Úsala para «cómo va cada área», comparativas entre áreas o el estado general del portafolio.", "parameters": {"type": "object", "properties": {}}},
@@ -410,6 +412,8 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.areas_overview(db, user)
     if name == "upcoming_deliveries":
         return await tools.upcoming_deliveries(db, user)
+    if name == "recent_created":
+        return await tools.recent_created(db, user)
     if name == "list_tasks":
         return await tools.list_tasks(db, user, args.get("project_name", ""))
     if name == "list_project_members":

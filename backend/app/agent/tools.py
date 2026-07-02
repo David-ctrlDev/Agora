@@ -374,6 +374,44 @@ async def upcoming_deliveries(db: AsyncSession, user: User, limit: int = 10) -> 
     ]
 
 
+async def recent_created(db: AsyncSession, user: User, limit: int = 20) -> dict[str, Any]:
+    """Proyectos y tareas creados más recientemente (con su área/dueño y a quién se
+    asignó cada tarea). Ordenados del más nuevo al más antiguo."""
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"projects": [], "tasks": []}
+    proj_rows = (
+        await db.execute(
+            select(Project.name, Area.name, User.name, Project.created_at)
+            .join(Area, Area.id == Project.area_id)
+            .join(User, User.id == Project.owner_id, isouter=True)
+            .where(Project.id.in_(pids))
+            .order_by(Project.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    task_rows = (
+        await db.execute(
+            select(Task.title, Project.name, User.name, Task.created_at)
+            .join(Project, Project.id == Task.project_id)
+            .join(User, User.id == Task.assignee_id, isouter=True)
+            .where(Task.project_id.in_(pids))
+            .order_by(Task.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    return {
+        "projects": [
+            {"name": n, "area": a, "owner": o, "created_at": c.isoformat() if c else None}
+            for (n, a, o, c) in proj_rows
+        ],
+        "tasks": [
+            {"title": t, "project": p, "assignee": asg or "(sin asignar)", "created_at": c.isoformat() if c else None}
+            for (t, p, asg, c) in task_rows
+        ],
+    }
+
+
 async def list_tasks(db: AsyncSession, user: User, project_name: str) -> dict[str, Any]:
     """Tareas de un proyecto (título, estado, prioridad, responsable, fecha)."""
     pids = await _accessible_project_ids(db, user)
