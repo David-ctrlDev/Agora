@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   open: boolean;
@@ -20,13 +21,16 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
 
   if (!open) return null;
 
-  return (
+  // Portal a <body>: escapa de cualquier ancestro con `transform` (p. ej. el
+  // wrapper con animate-fade-in), que si no haría que el `fixed` se posicione
+  // relativo a ese contenedor y el modal saliera arriba en vez de centrado.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-10"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-900/40 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg animate-fade-in rounded-2xl bg-white shadow-pop"
+        className="my-auto flex max-h-[90vh] w-full max-w-lg animate-fade-in flex-col rounded-2xl bg-white shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -39,8 +43,9 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
