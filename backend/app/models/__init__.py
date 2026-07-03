@@ -6,6 +6,7 @@ from app.models.agent_conversation import AgentConversation
 from app.models.agent_message import AgentMessage
 from app.models.area import Area
 from app.models.audit_log import AuditLog
+from app.models.catalog_term import CatalogTerm
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_version import DocumentVersion
@@ -30,6 +31,7 @@ __all__ = [
     "AgentMessage",
     "Area",
     "AuditLog",
+    "CatalogTerm",
     "Document",
     "DocumentChunk",
     "DocumentVersion",

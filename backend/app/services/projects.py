@@ -116,6 +116,9 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
         start_date=payload.start_date,
         due_date=payload.due_date,
         progress=payload.progress,
+        category=payload.category or None,
+        process=payload.process or None,
+        project_type=payload.project_type or None,
     )
     db.add(project)
     await db.flush()

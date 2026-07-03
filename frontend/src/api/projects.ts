@@ -48,6 +48,9 @@ export interface ProjectCreate {
   start_date?: string | null;
   due_date?: string | null;
   progress?: number;
+  category?: string | null;
+  process?: string | null;
+  project_type?: string | null;
 }
 
 export interface ProjectUpdate extends Partial<RoadmapFields> {

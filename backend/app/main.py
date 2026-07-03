@@ -9,6 +9,7 @@ from app.routers import (
     areas,
     audit,
     auth,
+    catalog,
     comments,
     economics,
     github,
@@ -40,6 +41,7 @@ app.include_router(economics.router)
 app.include_router(audit.router)
 app.include_router(users.router)
 app.include_router(admin.router)
+app.include_router(catalog.router)
 
 
 @app.get("/api/health", tags=["health"])

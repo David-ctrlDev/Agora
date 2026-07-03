@@ -13,6 +13,7 @@ import {
   removeMember,
   updateProject,
 } from "../api/projects";
+import { listCatalog } from "../api/catalog";
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
 import AnalyticsPanel from "../components/AnalyticsPanel";
@@ -40,6 +41,9 @@ export default function ProjectDetailPage() {
     queryFn: () => listMembers(projectId),
   });
   const usersQuery = useQuery({ queryKey: ["users"], queryFn: listUsers });
+  const catProcess = useQuery({ queryKey: ["catalog", "process"], queryFn: () => listCatalog("process") });
+  const catCategory = useQuery({ queryKey: ["catalog", "category"], queryFn: () => listCatalog("category") });
+  const catType = useQuery({ queryKey: ["catalog", "project_type"], queryFn: () => listCatalog("project_type") });
 
   const updateStatus = useMutation({
     mutationFn: (status: ProjectStatus) => updateProject(projectId, { status }),
@@ -72,12 +76,26 @@ export default function ProjectDetailPage() {
   const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
   const [newMemberRole, setNewMemberRole] = useState("editor");
 
-  const [plan, setPlan] = useState({ progress: "", start: "", due: "" });
+  const [plan, setPlan] = useState({
+    progress: "",
+    start: "",
+    due: "",
+    category: "",
+    process: "",
+    project_type: "",
+  });
   const [desc, setDesc] = useState("");
   useEffect(() => {
     const p = projectQuery.data;
     if (p) {
-      setPlan({ progress: String(p.progress ?? 0), start: p.start_date ?? "", due: p.due_date ?? "" });
+      setPlan({
+        progress: String(p.progress ?? 0),
+        start: p.start_date ?? "",
+        due: p.due_date ?? "",
+        category: p.category ?? "",
+        process: p.process ?? "",
+        project_type: p.project_type ?? "",
+      });
       setDesc(p.description ?? "");
     }
   }, [projectQuery.data]);
@@ -87,6 +105,9 @@ export default function ProjectDetailPage() {
         progress: plan.progress === "" ? 0 : Number(plan.progress),
         start_date: plan.start || null,
         due_date: plan.due || null,
+        category: plan.category || null,
+        process: plan.process || null,
+        project_type: plan.project_type || null,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
   });
@@ -246,6 +267,26 @@ export default function ProjectDetailPage() {
               value={plan.due}
               onChange={(e) => setPlan({ ...plan, due: e.target.value })}
             />
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Select label="Proceso" value={plan.process} onChange={(e) => setPlan({ ...plan, process: e.target.value })}>
+              <option value="">— Sin proceso —</option>
+              {(catProcess.data ?? []).map((t) => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </Select>
+            <Select label="Categoría" value={plan.category} onChange={(e) => setPlan({ ...plan, category: e.target.value })}>
+              <option value="">— Sin categoría —</option>
+              {(catCategory.data ?? []).map((t) => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </Select>
+            <Select label="Tipo" value={plan.project_type} onChange={(e) => setPlan({ ...plan, project_type: e.target.value })}>
+              <option value="">— Sin tipo —</option>
+              {(catType.data ?? []).map((t) => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </Select>
           </div>
           <div className="mt-3 flex items-center gap-3">
             <Button size="sm" onClick={() => savePlan.mutate()} disabled={savePlan.isPending}>

@@ -15,6 +15,9 @@ class ProjectCreate(BaseModel):
     start_date: date | None = None
     due_date: date | None = None
     progress: int = Field(default=0, ge=0, le=100)
+    category: str | None = None
+    process: str | None = None
+    project_type: str | None = None
 
 
 class RoadmapFields(BaseModel):

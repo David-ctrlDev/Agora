@@ -11,6 +11,7 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Tags,
   Trash2,
   UserPlus,
   Users,
@@ -42,6 +43,7 @@ import {
 import { getAdminTaskSummary } from "../api/tasks";
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
+import { CatalogManager } from "../components/CatalogManager";
 import { TaskSummaryView } from "../components/TaskSummaryView";
 import {
   Badge,
@@ -699,6 +701,7 @@ const TABS = [
   { key: "tareas", label: "Tareas", icon: ListChecks },
   { key: "users", label: "Usuarios", icon: Users },
   { key: "areas", label: "Áreas", icon: Building2 },
+  { key: "maestras", label: "Maestras", icon: Tags },
 ] as const;
 
 type AdminTab = (typeof TABS)[number]["key"];
@@ -745,8 +748,10 @@ export default function AdminPage() {
         <TareasTab />
       ) : tab === "users" ? (
         <UsersTab />
-      ) : (
+      ) : tab === "areas" ? (
         <AreasTab />
+      ) : (
+        <CatalogManager />
       )}
 
       <p className="flex items-center gap-1.5 text-xs text-slate-400">

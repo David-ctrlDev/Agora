@@ -16,9 +16,11 @@ from app.schemas.admin import (
     UserAreasSet,
 )
 from app.schemas.area import AreaCreate, AreaRead
+from app.schemas.catalog import CatalogTermCreate, CatalogTermRead
 from app.schemas.task import TaskSummary
 from app.services import admin as admin_svc
 from app.services import areas as areas_service
+from app.services import catalog as catalog_svc
 from app.services import tasks as tasks_svc
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -38,6 +40,44 @@ async def activity(limit: int = 10, db: AsyncSession = Depends(get_db)) -> Admin
 async def all_tasks(db: AsyncSession = Depends(get_db)) -> TaskSummary:
     """Resumen de todas las tareas del sistema (a quién, en qué proyecto y área)."""
     return await tasks_svc.task_summary(db, None)
+
+
+# --- Maestras (proceso / categoría / tipo) ---
+
+
+@router.get("/catalog", response_model=list[CatalogTermRead])
+async def list_catalog(kind: str, db: AsyncSession = Depends(get_db)) -> list[CatalogTermRead]:
+    try:
+        return await catalog_svc.list_terms(db, kind)
+    except catalog_svc.InvalidKind:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="kind inválido"
+        ) from None
+
+
+@router.post("/catalog", response_model=CatalogTermRead, status_code=status.HTTP_201_CREATED)
+async def create_catalog(
+    payload: CatalogTermCreate, db: AsyncSession = Depends(get_db)
+) -> CatalogTermRead:
+    try:
+        return await catalog_svc.create_term(db, payload.kind, payload.name)
+    except catalog_svc.InvalidKind:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="kind inválido"
+        ) from None
+    except catalog_svc.InvalidName:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nombre vacío"
+        ) from None
+    except catalog_svc.TermExists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Ya existe ese valor en la maestra"
+        ) from None
+
+
+@router.delete("/catalog/{term_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_catalog(term_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    await catalog_svc.delete_term(db, term_id)
 
 
 async def _get_user(user_id: int, db: AsyncSession) -> User:

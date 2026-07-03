@@ -4,6 +4,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { listAreas } from "../api/areas";
+import { listCatalog } from "../api/catalog";
 import {
   PROJECT_STATUS,
   type Project,
@@ -38,6 +39,9 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const areasQuery = useQuery({ queryKey: ["areas"], queryFn: listAreas });
+  const catProcess = useQuery({ queryKey: ["catalog", "process"], queryFn: () => listCatalog("process") });
+  const catCategory = useQuery({ queryKey: ["catalog", "category"], queryFn: () => listCatalog("category") });
+  const catType = useQuery({ queryKey: ["catalog", "project_type"], queryFn: () => listCatalog("project_type") });
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -46,6 +50,9 @@ export default function ProjectsPage() {
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [processName, setProcessName] = useState("");
+  const [projectType, setProjectType] = useState("");
 
   const [scope, setScope] = useState<"mine" | "area">("mine");
   const [search, setSearch] = useState("");
@@ -73,6 +80,9 @@ export default function ProjectsPage() {
       setStartDate("");
       setDueDate("");
       setDescription("");
+      setCategory("");
+      setProcessName("");
+      setProjectType("");
     },
   });
 
@@ -86,6 +96,9 @@ export default function ProjectsPage() {
       start_date: startDate || null,
       due_date: dueDate || null,
       description: description.trim() || null,
+      category: category || null,
+      process: processName || null,
+      project_type: projectType || null,
     });
   };
 
@@ -212,6 +225,26 @@ export default function ProjectsPage() {
                 <Input label="Inicio" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 <Input label="Entrega" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Select label="Proceso" value={processName} onChange={(e) => setProcessName(e.target.value)}>
+                <option value="">— Sin proceso —</option>
+                {(catProcess.data ?? []).map((t) => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </Select>
+              <Select label="Categoría" value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">— Sin categoría —</option>
+                {(catCategory.data ?? []).map((t) => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </Select>
+              <Select label="Tipo" value={projectType} onChange={(e) => setProjectType(e.target.value)}>
+                <option value="">— Sin tipo —</option>
+                {(catType.data ?? []).map((t) => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </Select>
             </div>
             <Input
               label="Descripción (opcional)"
