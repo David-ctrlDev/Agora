@@ -1,14 +1,22 @@
 """Métricas de avance por proyecto y resumen global, filtradas por área."""
-from datetime import date
+from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.area import Area
 from app.models.project import Project
+from app.models.project_progress_snapshot import ProjectProgressSnapshot
 from app.models.task import Task
 from app.models.user import User
-from app.schemas.analytics import AreaStat, Overview, OverviewTotals, ProjectAnalytics
+from app.schemas.analytics import (
+    AreaStat,
+    Overview,
+    OverviewTotals,
+    ProjectAnalytics,
+    QuarterCategoryStat,
+    QuarterlyTracking,
+)
 from app.services import projects as projects_svc
 
 _STATUSES = ["todo", "in_progress", "blocked", "done"]
@@ -159,4 +167,106 @@ async def overview(db: AsyncSession, user: User) -> Overview:
         task_by_status=task_by_status,
         project_by_status=project_by_status,
         by_criticality=by_criticality,
+    )
+
+
+# --- Seguimiento trimestral ------------------------------------------------
+
+
+def _quarter_bounds(year: int, quarter: int) -> tuple[date, date]:
+    start_month = 3 * (quarter - 1) + 1
+    start = date(year, start_month, 1)
+    if quarter == 4:
+        end = date(year, 12, 31)
+    else:
+        end = date(year, start_month + 3, 1) - timedelta(days=1)
+    return start, end
+
+
+async def quarterly_tracking(
+    db: AsyncSession, user: User, *, year: int, quarter: int
+) -> QuarterlyTracking:
+    """Proyectos "trabajados" en un trimestre: aquellos cuyo rango [inicio, entrega]
+    se cruza con el trimestre. Un proyecto que dura varios trimestres aparece en cada
+    uno. El % de avance es el actual para el trimestre en curso, o el que tenía al
+    cierre (último snapshot <= fin) para trimestres pasados. Segmentado por área."""
+    quarter = min(max(quarter, 1), 4)
+    q_start, q_end = _quarter_bounds(year, quarter)
+    today = date.today()
+    is_current = q_start <= today <= q_end
+    label = f"TRIMESTRE {quarter} DE {year}"
+
+    project_ids = await projects_svc.accessible_project_ids(db, user)
+    if not project_ids:
+        return QuarterlyTracking(
+            year=year, quarter=quarter, label=label, start=q_start, end=q_end,
+            total_projects=0, avg_progress=0, is_current=is_current,
+            without_dates=0, by_category=[], min_year=None, max_year=None,
+        )
+
+    rows = (
+        await db.execute(
+            select(
+                Project.id, Project.category, Project.progress,
+                Project.start_date, Project.due_date,
+            ).where(Project.id.in_(project_ids))
+        )
+    ).all()
+
+    starts: list[date] = []
+    ends: list[date] = []
+    without_dates = 0
+    members: list[tuple[int, str | None, int]] = []  # (id, category, avance actual)
+    for pid, category, progress, sd, dd in rows:
+        eff_start = sd or dd
+        eff_end = dd or sd
+        if eff_start is None:  # sin ninguna fecha -> no ubicable en trimestres
+            without_dates += 1
+            continue
+        starts.append(eff_start)
+        ends.append(eff_end)
+        if eff_start <= q_end and eff_end >= q_start:  # el rango cruza el trimestre
+            members.append((pid, category, progress))
+
+    min_year = min(d.year for d in starts) if starts else None
+    max_year = max(d.year for d in ends) if ends else None
+
+    # Avance por proyecto. En curso/futuro: avance actual. Pasado: último snapshot
+    # con fecha <= cierre del trimestre; si no hay, cae al avance actual.
+    progress_at: dict[int, int] = {pid: prog for pid, _, prog in members}
+    member_ids = [pid for pid, _, _ in members]
+    if member_ids and q_end < today:
+        snaps = (
+            await db.execute(
+                select(ProjectProgressSnapshot.project_id, ProjectProgressSnapshot.progress)
+                .where(
+                    ProjectProgressSnapshot.project_id.in_(member_ids),
+                    func.date(ProjectProgressSnapshot.captured_at) <= q_end,
+                )
+                .order_by(
+                    ProjectProgressSnapshot.project_id, ProjectProgressSnapshot.captured_at
+                )
+            )
+        ).all()
+        for pid, prog in snaps:  # orden ascendente -> gana el más reciente <= cierre
+            progress_at[pid] = prog
+
+    total = len(members)
+    avg = round(sum(progress_at[pid] for pid, _, _ in members) / total) if total else 0
+
+    by_cat: dict[str, list[int]] = {}
+    for pid, category, _ in members:
+        cat = (category or "").strip().upper() or "SIN CATEGORÍA"
+        by_cat.setdefault(cat, []).append(progress_at[pid])
+    by_category = [
+        QuarterCategoryStat(category=c, count=len(v), avg_progress=round(sum(v) / len(v)))
+        for c, v in by_cat.items()
+    ]
+    by_category.sort(key=lambda s: (-s.count, s.category))
+
+    return QuarterlyTracking(
+        year=year, quarter=quarter, label=label, start=q_start, end=q_end,
+        total_projects=total, avg_progress=avg, is_current=is_current,
+        without_dates=without_dates, by_category=by_category,
+        min_year=min_year, max_year=max_year,
     )

@@ -50,3 +50,24 @@ class Overview(BaseModel):
     task_by_status: dict[str, int] = {}
     project_by_status: dict[str, int] = {}
     by_criticality: dict[str, int] = {}
+
+
+class QuarterCategoryStat(BaseModel):
+    category: str
+    count: int
+    avg_progress: int
+
+
+class QuarterlyTracking(BaseModel):
+    year: int
+    quarter: int  # 1..4
+    label: str
+    start: date
+    end: date
+    total_projects: int  # proyectos trabajados (con rango que cruza el trimestre)
+    avg_progress: int  # % de avance al cierre del trimestre (histórico) o actual
+    is_current: bool  # el trimestre en curso (usa avance actual, no snapshot)
+    without_dates: int  # proyectos accesibles sin fechas (no ubicables en trimestres)
+    by_category: list[QuarterCategoryStat] = []
+    min_year: int | None = None
+    max_year: int | None = None

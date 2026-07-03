@@ -1,10 +1,12 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.schemas.analytics import Overview, ProjectAnalytics
+from app.schemas.analytics import Overview, ProjectAnalytics, QuarterlyTracking
 from app.services import analytics as svc
 from app.services import projects as projects_svc
 
@@ -16,6 +18,19 @@ async def analytics_overview(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> Overview:
     return await svc.overview(db, user)
+
+
+@router.get("/analytics/quarterly", response_model=QuarterlyTracking)
+async def analytics_quarterly(
+    year: int | None = None,
+    quarter: int | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> QuarterlyTracking:
+    today = date.today()
+    y = year or today.year
+    q = quarter or ((today.month - 1) // 3 + 1)
+    return await svc.quarterly_tracking(db, user, year=y, quarter=q)
 
 
 @router.get("/projects/{project_id}/analytics", response_model=ProjectAnalytics)

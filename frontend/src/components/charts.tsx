@@ -3,6 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Line,
   LineChart,
   Pie,
@@ -138,6 +139,53 @@ export function Donut({
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Barras verticales de porcentaje (0–100) con etiqueta encima. Estilo reporte. */
+export function PercentBars({
+  items,
+  height = 280,
+  color = "#0d9488",
+}: {
+  items: { label: string; value: number }[];
+  height?: number;
+  color?: string;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={items} margin={{ top: 24, right: 8, left: -8, bottom: 8 }}>
+        <CartesianGrid vertical={false} stroke="#f1f5f9" />
+        <XAxis
+          dataKey="label"
+          interval={0}
+          angle={-20}
+          textAnchor="end"
+          height={70}
+          tickLine={false}
+          axisLine={{ stroke: "#e2e8f0" }}
+          tick={{ fontSize: 10, fill: "#64748b" }}
+        />
+        <YAxis
+          domain={[0, 100]}
+          tickFormatter={(v) => `${v}%`}
+          width={44}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fontSize: 11, fill: "#94a3b8" }}
+        />
+        <Tooltip formatter={(v) => [`${v ?? 0}%`, "Avance"]} cursor={{ fill: "#f8fafc" }} />
+        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} maxBarSize={72} isAnimationActive={false}>
+          <LabelList
+            dataKey="value"
+            position="top"
+            formatter={(v) => `${v}%`}
+            style={{ fontSize: 11, fontWeight: 700, fill: "#0f172a" }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 

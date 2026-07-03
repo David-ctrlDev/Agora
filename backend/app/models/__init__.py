@@ -16,6 +16,7 @@ from app.models.notification import Notification
 from app.models.oauth_token import OAuthToken
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.project_progress_snapshot import ProjectProgressSnapshot
 from app.models.sprint import Sprint
 from app.models.task import Task
 from app.models.task_comment import TaskComment
@@ -39,6 +40,7 @@ __all__ = [
     "OAuthToken",
     "Project",
     "ProjectMember",
+    "ProjectProgressSnapshot",
     "Sprint",
     "Task",
     "TaskComment",

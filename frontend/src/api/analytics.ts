@@ -51,9 +51,38 @@ export interface Overview {
   by_criticality: Record<string, number>;
 }
 
+export interface QuarterCategoryStat {
+  category: string;
+  count: number;
+  avg_progress: number;
+}
+
+export interface QuarterlyTracking {
+  year: number;
+  quarter: number;
+  label: string;
+  start: string;
+  end: string;
+  total_projects: number;
+  avg_progress: number;
+  is_current: boolean;
+  without_dates: number;
+  by_category: QuarterCategoryStat[];
+  min_year: number | null;
+  max_year: number | null;
+}
+
 export const getProjectAnalytics = (id: number) =>
   api.get<ProjectAnalytics>(`/api/projects/${id}/analytics`);
 export const getOverview = () => api.get<Overview>("/api/analytics/overview");
+
+export const getQuarterlyTracking = (year?: number, quarter?: number) => {
+  const params = new URLSearchParams();
+  if (year) params.set("year", String(year));
+  if (quarter) params.set("quarter", String(quarter));
+  const qs = params.toString();
+  return api.get<QuarterlyTracking>(`/api/analytics/quarterly${qs ? `?${qs}` : ""}`);
+};
 
 export const HEALTH: Record<string, { label: string; tone: Tone }> = {
   sin_tareas: { label: "Sin tareas", tone: "neutral" },

@@ -20,6 +20,7 @@ import {
   getOverview,
 } from "../api/analytics";
 import { Donut } from "../components/charts";
+import { QuarterlyTracking } from "../components/QuarterlyTracking";
 import { Badge, Kpi, PageHeader, Panel, Select, Spinner } from "../components/ui";
 
 type Meta = Record<string, { label: string; color: string }>;
@@ -106,6 +107,7 @@ export default function AnalyticsPage() {
   const [fCat, setFCat] = useState("");
   const [fFrom, setFFrom] = useState("");
   const [fTo, setFTo] = useState("");
+  const [tab, setTab] = useState<"cartera" | "trimestres">("cartera");
 
   const all = query.data?.projects ?? [];
   const areaOpts = useMemo(() => uniques(all, (p) => p.area_name), [all]);
@@ -126,9 +128,6 @@ export default function AnalyticsPage() {
       ),
     [all, fArea, fStatus, fCrit, fCat, fFrom, fTo],
   );
-
-  if (query.isLoading) return <Spinner label="Cargando analítica…" />;
-  if (!query.data) return null;
 
   const hasFilter = fArea || fStatus || fCrit || fCat || fFrom || fTo;
   const clear = () => {
@@ -198,6 +197,33 @@ export default function AnalyticsPage() {
         description="Avance y salud de la cartera de proyectos."
       />
 
+      {/* Pestañas */}
+      <div className="inline-flex flex-wrap gap-0.5 rounded-xl border border-slate-200 bg-white p-0.5 text-sm font-medium shadow-card">
+        {(
+          [
+            ["cartera", "Cartera"],
+            ["trimestres", "Seguimiento trimestres"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={`rounded-lg px-3 py-1.5 transition ${
+              tab === k ? "bg-brand-600 text-white" : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "trimestres" ? (
+        <QuarterlyTracking />
+      ) : query.isLoading ? (
+        <Spinner label="Cargando analítica…" />
+      ) : !query.data ? null : (
+        <>
       {/* Filtros */}
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card">
         <div className="w-40">
@@ -402,6 +428,8 @@ export default function AnalyticsPage() {
               </div>
             )}
           </Panel>
+        </>
+      )}
         </>
       )}
     </div>

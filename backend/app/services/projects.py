@@ -138,10 +138,20 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
 
 
 async def update_project(db: AsyncSession, project: Project, payload: ProjectUpdate) -> ProjectRead:
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    progress_changed = (
+        "progress" in data and data["progress"] is not None and data["progress"] != project.progress
+    )
+    for key, value in data.items():
         setattr(project, key, value)
     await db.commit()
     await db.refresh(project)
+    # Sella el nuevo avance para el histórico trimestral (solo cuando cambia).
+    if progress_changed:
+        from app.models.project_progress_snapshot import ProjectProgressSnapshot
+
+        db.add(ProjectProgressSnapshot(project_id=project.id, progress=project.progress))
+        await db.commit()
     return await to_read(db, project)
 
 
