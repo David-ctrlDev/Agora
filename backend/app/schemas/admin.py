@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -53,6 +55,44 @@ class AdminStats(BaseModel):
     two_fa: int
     areas: int
     projects: int
+    active_projects: int
     tasks: int
+    open_tasks: int
+    overdue_tasks: int
     google_provider: str
     gemini_provider: str
+
+
+class ActivityProject(BaseModel):
+    id: int
+    name: str
+    status: str
+    area_name: str | None = None
+    owner_name: str | None = None
+    created_at: datetime
+
+
+class ActivityTask(BaseModel):
+    id: int
+    title: str
+    status: str
+    priority: str
+    project_id: int
+    project_name: str | None = None
+    assignee_name: str | None = None
+    created_at: datetime
+
+
+class ActivityUser(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    at: datetime  # último ingreso (recent_logins) o alta (recent_users)
+
+
+class AdminActivity(BaseModel):
+    recent_projects: list[ActivityProject]
+    recent_tasks: list[ActivityTask]
+    recent_logins: list[ActivityUser]
+    recent_users: list[ActivityUser]

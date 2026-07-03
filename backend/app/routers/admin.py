@@ -7,6 +7,7 @@ from app.core.deps import require_admin
 from app.models.area import Area
 from app.models.user import User
 from app.schemas.admin import (
+    AdminActivity,
     AdminAreaUpdate,
     AdminStats,
     AdminUserCreate,
@@ -24,6 +25,11 @@ router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(re
 @router.get("/stats", response_model=AdminStats)
 async def stats(db: AsyncSession = Depends(get_db)) -> AdminStats:
     return await admin_svc.system_stats(db)
+
+
+@router.get("/activity", response_model=AdminActivity)
+async def activity(limit: int = 10, db: AsyncSession = Depends(get_db)) -> AdminActivity:
+    return await admin_svc.recent_activity(db, limit=min(max(limit, 1), 50))
 
 
 async def _get_user(user_id: int, db: AsyncSession) -> User:

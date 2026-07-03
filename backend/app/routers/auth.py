@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -44,6 +45,12 @@ def _set_session_cookie(response: Response, user_id: int) -> None:
         samesite=settings.session_cookie_samesite,
         path="/",
     )
+
+
+async def _mark_login(db: AsyncSession, user: User) -> None:
+    """Sella el momento del ingreso (para la auditoría del panel admin)."""
+    user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()
 
 
 async def _current_user_payload(db: AsyncSession, user: User) -> CurrentUser:
@@ -113,6 +120,7 @@ async def dev_login(
         _set_pending_2fa_cookie(response, user.id)
         return LoginResponse(needs_2fa=True)
     _set_session_cookie(response, user.id)
+    await _mark_login(db, user)
     return LoginResponse(user=await _current_user_payload(db, user))
 
 
@@ -193,6 +201,7 @@ async def google_callback(
         resp = RedirectResponse("/inicio")
         resp.delete_cookie("g_login_state", path="/")
         _set_session_cookie(resp, user.id)
+        await _mark_login(db, user)
         return resp
 
     # Conexión: requiere una sesión vigente.
@@ -267,4 +276,5 @@ async def twofa_verify(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código inválido")
     _set_session_cookie(response, user.id)
     response.delete_cookie(PENDING_2FA_COOKIE, path="/")
+    await _mark_login(db, user)
     return await _current_user_payload(db, user)

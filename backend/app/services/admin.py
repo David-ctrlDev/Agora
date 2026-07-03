@@ -1,6 +1,7 @@
 """Servicios de administración (solo admin global)."""
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.config import settings
 from app.models.area import Area
@@ -9,6 +10,10 @@ from app.models.task import Task
 from app.models.user import User
 from app.models.user_area import UserArea
 from app.schemas.admin import (
+    ActivityProject,
+    ActivityTask,
+    ActivityUser,
+    AdminActivity,
     AdminAreaMembership,
     AdminStats,
     AdminUserCreate,
@@ -32,9 +37,110 @@ async def system_stats(db: AsyncSession) -> AdminStats:
         two_fa=await count(User, User.totp_enabled.is_(True)),
         areas=await count(Area),
         projects=await count(Project),
+        active_projects=await count(Project, Project.status == "active"),
         tasks=await count(Task),
+        open_tasks=await count(Task, Task.status != "done"),
+        overdue_tasks=await count(
+            Task,
+            Task.status != "done",
+            Task.due_date.is_not(None),
+            Task.due_date < func.current_date(),
+        ),
         google_provider=settings.google_provider,
         gemini_provider=settings.gemini_provider,
+    )
+
+
+async def recent_activity(db: AsyncSession, *, limit: int = 10) -> AdminActivity:
+    """Feeds de auditoría para el panel admin: últimos proyectos y tareas creadas,
+    últimos ingresos y últimos usuarios registrados. Solo admin (ve todas las áreas)."""
+    owner = aliased(User)
+    proj_rows = (
+        await db.execute(
+            select(
+                Project.id,
+                Project.name,
+                Project.status,
+                Project.created_at,
+                Area.name,
+                owner.name,
+            )
+            .join(Area, Area.id == Project.area_id)
+            .outerjoin(owner, owner.id == Project.owner_id)
+            .order_by(Project.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    recent_projects = [
+        ActivityProject(
+            id=pid, name=name, status=st, created_at=created, area_name=area, owner_name=own
+        )
+        for pid, name, st, created, area, own in proj_rows
+    ]
+
+    assignee = aliased(User)
+    task_rows = (
+        await db.execute(
+            select(
+                Task.id,
+                Task.title,
+                Task.status,
+                Task.priority,
+                Task.project_id,
+                Task.created_at,
+                Project.name,
+                assignee.name,
+            )
+            .join(Project, Project.id == Task.project_id)
+            .outerjoin(assignee, assignee.id == Task.assignee_id)
+            .order_by(Task.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    recent_tasks = [
+        ActivityTask(
+            id=tid,
+            title=title,
+            status=st,
+            priority=prio,
+            project_id=proj_id,
+            created_at=created,
+            project_name=proj_name,
+            assignee_name=assignee_name,
+        )
+        for tid, title, st, prio, proj_id, created, proj_name, assignee_name in task_rows
+    ]
+
+    login_rows = (
+        await db.execute(
+            select(User.id, User.name, User.email, User.role, User.last_login_at)
+            .where(User.last_login_at.is_not(None))
+            .order_by(User.last_login_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    recent_logins = [
+        ActivityUser(id=uid, name=name, email=email, role=role, at=at)
+        for uid, name, email, role, at in login_rows
+    ]
+
+    user_rows = (
+        await db.execute(
+            select(User.id, User.name, User.email, User.role, User.created_at)
+            .order_by(User.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    recent_users = [
+        ActivityUser(id=uid, name=name, email=email, role=role, at=at)
+        for uid, name, email, role, at in user_rows
+    ]
+
+    return AdminActivity(
+        recent_projects=recent_projects,
+        recent_tasks=recent_tasks,
+        recent_logins=recent_logins,
+        recent_users=recent_users,
     )
 
 _ROLES = {"admin", "member"}

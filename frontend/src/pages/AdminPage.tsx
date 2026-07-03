@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
   Building2,
   Cloud,
   FolderKanban,
   LayoutDashboard,
+  ListChecks,
+  LogIn,
   Pencil,
   Plus,
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -18,6 +22,7 @@ import {
   type AdminUser,
   createAdminArea,
   createAdminUser,
+  getAdminActivity,
   getAdminStats,
   listAdminAreas,
   listAdminUsers,
@@ -434,8 +439,8 @@ function ResumenTab() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Usuarios" value={s.users} hint={`${s.active_users} activos · ${s.admins} admin`} icon={<Users className="h-4 w-4" />} tone="brand" />
         <Kpi label="Áreas" value={s.areas} hint="organizativas" icon={<Building2 className="h-4 w-4" />} tone="brand" />
-        <Kpi label="Proyectos" value={s.projects} hint="en la plataforma" icon={<FolderKanban className="h-4 w-4" />} tone="emerald" />
-        <Kpi label="Tareas" value={s.tasks} hint="registradas" icon={<LayoutDashboard className="h-4 w-4" />} tone="slate" />
+        <Kpi label="Proyectos" value={s.projects} hint={`${s.active_projects} activos`} icon={<FolderKanban className="h-4 w-4" />} tone="emerald" />
+        <Kpi label="Tareas" value={s.tasks} hint={`${s.open_tasks} abiertas · ${s.overdue_tasks} vencidas`} icon={<LayoutDashboard className="h-4 w-4" />} tone="slate" />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Integraciones">
@@ -463,6 +468,138 @@ function ResumenTab() {
           </ul>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return "hace un momento";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `hace ${d} d`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `hace ${mo} ${mo === 1 ? "mes" : "meses"}`;
+  const y = Math.floor(mo / 12);
+  return `hace ${y} ${y === 1 ? "año" : "años"}`;
+}
+
+const fmtDateTime = (iso: string) =>
+  new Date(iso).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
+
+const TASK_STATUS = {
+  todo: { label: "Por hacer", tone: "neutral" },
+  in_progress: { label: "En curso", tone: "brand" },
+  blocked: { label: "Bloqueada", tone: "danger" },
+  done: { label: "Hecha", tone: "success" },
+} as const;
+
+const panelTitle = (icon: JSX.Element, text: string) => (
+  <span className="flex items-center gap-2">
+    {icon}
+    {text}
+  </span>
+);
+
+function RoleBadge({ role }: { role: string }) {
+  return <Badge tone={role === "admin" ? "brand" : "neutral"}>{role === "admin" ? "Admin" : "Miembro"}</Badge>;
+}
+
+function UserRow({ name, email, role, at }: { name: string; email: string; role: string; at: string }) {
+  return (
+    <li className="flex items-center justify-between gap-3 px-2 py-2.5">
+      <div className="min-w-0">
+        <div className="truncate font-medium text-slate-800">{name}</div>
+        <div className="truncate text-xs text-slate-400">{email}</div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <RoleBadge role={role} />
+        <span className="text-[11px] text-slate-400" title={fmtDateTime(at)}>{timeAgo(at)}</span>
+      </div>
+    </li>
+  );
+}
+
+function ActividadTab() {
+  const activity = useQuery({ queryKey: ["admin-activity"], queryFn: () => getAdminActivity(12) });
+  if (activity.isLoading) return <Spinner label="Cargando actividad…" />;
+  const a = activity.data;
+  if (!a) return null;
+  const empty = (t: string) => <li className="px-2 py-3 text-sm text-slate-400">{t}</li>;
+  const listBody = "px-3 py-1.5";
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Panel title={panelTitle(<FolderKanban className="h-4 w-4 text-slate-400" />, "Proyectos creados recientemente")} bodyClassName={listBody}>
+        <ul className="divide-y divide-slate-100">
+          {a.recent_projects.length === 0
+            ? empty("Sin proyectos recientes.")
+            : a.recent_projects.map((p) => {
+                const st = PROJECT_STATUS[p.status as ProjectStatus] ?? { label: p.status, tone: "neutral" as const };
+                return (
+                  <li key={p.id} className="flex items-start justify-between gap-3 px-2 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-slate-800" title={p.name}>{p.name}</div>
+                      <div className="truncate text-xs text-slate-400">
+                        {p.area_name ?? "—"}{p.owner_name ? ` · ${p.owner_name}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge tone={st.tone}>{st.label}</Badge>
+                      <span className="text-[11px] text-slate-400" title={fmtDateTime(p.created_at)}>{timeAgo(p.created_at)}</span>
+                    </div>
+                  </li>
+                );
+              })}
+        </ul>
+      </Panel>
+
+      <Panel title={panelTitle(<ListChecks className="h-4 w-4 text-slate-400" />, "Tareas creadas recientemente")} bodyClassName={listBody}>
+        <ul className="divide-y divide-slate-100">
+          {a.recent_tasks.length === 0
+            ? empty("Sin tareas recientes.")
+            : a.recent_tasks.map((t) => {
+                const st = TASK_STATUS[t.status as keyof typeof TASK_STATUS] ?? { label: t.status, tone: "neutral" as const };
+                return (
+                  <li key={t.id} className="flex items-start justify-between gap-3 px-2 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-slate-800" title={t.title}>{t.title}</div>
+                      <div className="truncate text-xs text-slate-400">
+                        {t.project_name ?? "—"}{t.assignee_name ? ` · ${t.assignee_name}` : " · sin asignar"}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge tone={st.tone}>{st.label}</Badge>
+                      <span className="text-[11px] text-slate-400" title={fmtDateTime(t.created_at)}>{timeAgo(t.created_at)}</span>
+                    </div>
+                  </li>
+                );
+              })}
+        </ul>
+      </Panel>
+
+      <Panel title={panelTitle(<LogIn className="h-4 w-4 text-slate-400" />, "Últimos ingresos")} bodyClassName={listBody}>
+        <ul className="divide-y divide-slate-100">
+          {a.recent_logins.length === 0
+            ? empty("Aún no hay ingresos registrados.")
+            : a.recent_logins.map((u) => (
+                <UserRow key={u.id} name={u.name} email={u.email} role={u.role} at={u.at} />
+              ))}
+        </ul>
+      </Panel>
+
+      <Panel title={panelTitle(<UserPlus className="h-4 w-4 text-slate-400" />, "Usuarios registrados recientemente")} bodyClassName={listBody}>
+        <ul className="divide-y divide-slate-100">
+          {a.recent_users.length === 0
+            ? empty("Sin usuarios.")
+            : a.recent_users.map((u) => (
+                <UserRow key={u.id} name={u.name} email={u.email} role={u.role} at={u.at} />
+              ))}
+        </ul>
+      </Panel>
     </div>
   );
 }
@@ -548,6 +685,7 @@ function ProjectsTab() {
 
 const TABS = [
   { key: "resumen", label: "Resumen", icon: LayoutDashboard },
+  { key: "actividad", label: "Actividad", icon: Activity },
   { key: "projects", label: "Proyectos", icon: FolderKanban },
   { key: "users", label: "Usuarios", icon: Users },
   { key: "areas", label: "Áreas", icon: Building2 },
@@ -589,6 +727,8 @@ export default function AdminPage() {
 
       {tab === "resumen" ? (
         <ResumenTab />
+      ) : tab === "actividad" ? (
+        <ActividadTab />
       ) : tab === "projects" ? (
         <ProjectsTab />
       ) : tab === "users" ? (
