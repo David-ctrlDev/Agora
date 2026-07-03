@@ -391,9 +391,9 @@ export default function ProjectsPage() {
             </div>
           ) : (
             <Card className="overflow-hidden p-0">
-              <div className="overflow-x-auto">
+              <div className="max-h-[70vh] overflow-auto">
                 <table className="w-full min-w-[1080px] text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-10">
                     <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       {SORT_COLUMNS.map((col) => {
                         const active = sortKey === col.key;
