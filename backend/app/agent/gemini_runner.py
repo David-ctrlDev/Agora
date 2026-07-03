@@ -31,7 +31,13 @@ def _system(user: User) -> str:
         "—incluido su ROI, costes, beneficios, sprints y fechas— usa project_details. Para el estado "
         "por áreas o del portafolio (avance y proyectos en riesgo) usa areas_overview; para "
         "vencimientos y «qué se entrega pronto» usa upcoming_deliveries; para «qué proyectos o tareas "
-        "NUEVAS se han creado» o «qué se ha asignado y a quién últimamente» usa recent_created; para alertas y riesgos usa "
+        "NUEVAS se han creado» o «qué se ha asignado y a quién últimamente» usa recent_created. "
+        "MUY IMPORTANTE: para CASI CUALQUIER pregunta de datos sobre proyectos o tareas que no tenga "
+        "una tool específica (listar, filtrar por estado/persona/área/prioridad/fecha, CONTAR o AGRUPAR, "
+        "«cuántos por…»), usa **query_data** — es tu herramienta principal y flexible; indica 'entity' y "
+        "solo los filtros que apliquen, y 'group_by' para conteos. Interpreta lo que pide el usuario y "
+        "arma la consulta; NO te rindas ni des una respuesta genérica si puedes resolverlo con query_data. "
+        "Para alertas y riesgos usa "
         "my_notifications; para el contenido de documentos, actas o transcripciones (incluidos los "
         "importados de Drive) usa knowledge_search. Google y Drive: google_status dice si hay conexión "
         "(si algo falla por falta de conexión, dile que conecte Google; nunca intentes iniciar sesión "
@@ -152,6 +158,23 @@ _FUNCTION_DECLARATIONS = [
     {"name": "list_tasks", "description": "Lista TODAS las tareas de un proyecto (título, estado, prioridad, responsable y fecha). Úsala para «qué tareas tiene el proyecto X», «lístame las tareas de X» o para ver el tablero de un proyecto.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "recent_activity", "description": "Actividad reciente del repositorio vinculado a los proyectos.", "parameters": {"type": "object", "properties": {}}},
     {"name": "recent_created", "description": "Proyectos y tareas creados más recientemente, con su área/dueño y a quién se asignó cada tarea. Úsala para «qué proyectos o tareas nuevas se han creado», «qué se ha asignado y a quién últimamente» o «novedades recientes».", "parameters": {"type": "object", "properties": {}}},
+    {"name": "query_data", "description": "Consulta FLEXIBLE sobre proyectos o tareas (siempre acotada a las áreas del usuario). Es tu herramienta PRINCIPAL para casi cualquier pregunta de datos que no tenga una tool específica: listar/filtrar, contar/agrupar y filtrar por fechas. Pon 'entity' y solo los filtros que apliquen; usa 'group_by' cuando pidan conteos/«cuántos por…». Ejemplos: tareas de una persona (assignee), proyectos de un área (area), tareas vencidas (due_before=hoy), «cuántas tareas por responsable» (entity=tasks, group_by=assignee), «proyectos por estado» (entity=projects, group_by=status), «qué se creó esta semana» (created_after=YYYY-MM-DD).", "parameters": {"type": "object", "properties": {
+        "entity": {"type": "string", "enum": ["tasks", "projects"]},
+        "status": {"type": "string", "description": "tasks: todo/in_progress/blocked/done · projects: planned/active/on_hold/done/archived"},
+        "assignee": {"type": "string", "description": "tareas: responsable (nombre/correo, o 'sin asignar')"},
+        "owner": {"type": "string", "description": "proyectos: dueño (nombre/correo)"},
+        "area": {"type": "string", "description": "nombre del área"},
+        "project": {"type": "string", "description": "tareas: nombre del proyecto"},
+        "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+        "criticality": {"type": "string"},
+        "search": {"type": "string", "description": "texto contenido en el título/nombre"},
+        "created_after": {"type": "string", "description": "ISO YYYY-MM-DD"},
+        "created_before": {"type": "string", "description": "ISO YYYY-MM-DD"},
+        "due_after": {"type": "string", "description": "ISO YYYY-MM-DD"},
+        "due_before": {"type": "string", "description": "ISO YYYY-MM-DD"},
+        "group_by": {"type": "string", "description": "para conteos. tasks: assignee|status|priority|project|area · projects: status|area|owner|criticality|category"},
+        "limit": {"type": "integer"}
+    }, "required": ["entity"]}},
     {"name": "project_summary", "description": "Resumen de un proyecto concreto, por su nombre.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "project_details", "description": "Ficha detallada de un proyecto por su nombre: estado, líder, avance %, categoría, criticidad, fechas, tareas, sprints y un ROI de dos lados — el proceso que lo hace (ejecutor: coste, esfuerzo en horas, equipo, complejidad, recursos) y el proceso para el que se hace (beneficiario: área, beneficio, horas ahorradas/mes y año, personas impactadas, reducción de riesgo, valor estratégico). Úsala para preguntas a fondo sobre un proyecto, su ROI, su impacto o su rentabilidad.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}},
     {"name": "areas_overview", "description": "Panorama por área (nº de proyectos, % de avance y cuántos en riesgo) y totales globales accesibles. Úsala para «cómo va cada área», comparativas entre áreas o el estado general del portafolio.", "parameters": {"type": "object", "properties": {}}},
@@ -414,6 +437,17 @@ async def _run_read(db: AsyncSession, user: User, name: str, args: dict[str, Any
         return await tools.upcoming_deliveries(db, user)
     if name == "recent_created":
         return await tools.recent_created(db, user)
+    if name == "query_data":
+        return await tools.query_data(
+            db, user, args.get("entity", ""),
+            status=args.get("status", ""), assignee=args.get("assignee", ""),
+            owner=args.get("owner", ""), area=args.get("area", ""),
+            project=args.get("project", ""), priority=args.get("priority", ""),
+            criticality=args.get("criticality", ""), search=args.get("search", ""),
+            created_after=args.get("created_after", ""), created_before=args.get("created_before", ""),
+            due_after=args.get("due_after", ""), due_before=args.get("due_before", ""),
+            group_by=args.get("group_by", ""), limit=int(args.get("limit") or 50),
+        )
     if name == "list_tasks":
         return await tools.list_tasks(db, user, args.get("project_name", ""))
     if name == "list_project_members":

@@ -374,6 +374,219 @@ async def upcoming_deliveries(db: AsyncSession, user: User, limit: int = 10) -> 
     ]
 
 
+async def query_data(
+    db: AsyncSession,
+    user: User,
+    entity: str,
+    *,
+    status: str = "",
+    assignee: str = "",
+    owner: str = "",
+    area: str = "",
+    project: str = "",
+    priority: str = "",
+    criticality: str = "",
+    search: str = "",
+    created_after: str = "",
+    created_before: str = "",
+    due_after: str = "",
+    due_before: str = "",
+    group_by: str = "",
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Consulta flexible y SEGURA sobre proyectos o tareas del usuario, SIEMPRE acotada
+    a sus áreas accesibles. Soporta filtros, rango de fechas y agrupación (conteos).
+    Cubre casi cualquier pregunta de datos sin necesidad de una tool por pregunta."""
+    from datetime import date as _date
+
+    pids = await _accessible_project_ids(db, user)
+    if not pids:
+        return {"entity": entity, "count": 0, "items": []}
+    limit = max(1, min(int(limit or 50), 200))
+
+    def pdate(s: str):
+        try:
+            return _date.fromisoformat((s or "").strip())
+        except ValueError:
+            return None
+
+    async def area_id(name: str):
+        n = (name or "").strip().lower()
+        if not n:
+            return None
+        return (
+            await db.execute(select(Area.id).where(func.lower(Area.name).contains(n)).limit(1))
+        ).scalar_one_or_none() or -1
+
+    async def user_id(name: str):
+        n = (name or "").strip().lower()
+        if n in ("sin asignar", "nadie", "unassigned", "sin responsable", "sin dueño"):
+            return "NONE"
+        if not n:
+            return None
+        return (
+            await db.execute(
+                select(User.id)
+                .where(
+                    or_(
+                        func.lower(User.email) == n,
+                        func.lower(User.name).contains(n),
+                        func.lower(User.email).contains(n),
+                    )
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none() or -1
+
+    if entity == "tasks":
+        conds = [Task.project_id.in_(pids)]
+        if status:
+            conds.append(Task.status == status)
+        if priority:
+            conds.append(Task.priority == priority)
+        if search:
+            conds.append(func.lower(Task.title).contains(search.strip().lower()))
+        if project:
+            conds.append(func.lower(Project.name).contains(project.strip().lower()))
+        if area:
+            conds.append(Project.area_id == await area_id(area))
+        if assignee:
+            uid = await user_id(assignee)
+            conds.append(Task.assignee_id.is_(None) if uid == "NONE" else Task.assignee_id == uid)
+        if pdate(created_after):
+            conds.append(func.date(Task.created_at) >= pdate(created_after))
+        if pdate(created_before):
+            conds.append(func.date(Task.created_at) <= pdate(created_before))
+        if pdate(due_after):
+            conds.append(Task.due_date >= pdate(due_after))
+        if pdate(due_before):
+            conds.append(Task.due_date <= pdate(due_before))
+
+        if group_by:
+            key = {
+                "assignee": func.coalesce(User.name, "(sin asignar)"),
+                "status": Task.status,
+                "priority": Task.priority,
+                "project": Project.name,
+                "area": Area.name,
+            }.get(group_by)
+            if key is None:
+                return {"error": f"group_by no soportado para tareas: {group_by}"}
+            rows = (
+                await db.execute(
+                    select(key.label("key"), func.count(Task.id).label("n"))
+                    .select_from(Task)
+                    .join(Project, Project.id == Task.project_id)
+                    .join(Area, Area.id == Project.area_id)
+                    .outerjoin(User, User.id == Task.assignee_id)
+                    .where(*conds)
+                    .group_by(key)
+                    .order_by(func.count(Task.id).desc())
+                )
+            ).all()
+            return {"entity": "tasks", "group_by": group_by, "groups": [{"key": k, "count": n} for k, n in rows]}
+
+        rows = (
+            await db.execute(
+                select(
+                    Task.title, Project.name, User.name, Task.status, Task.priority,
+                    Task.due_date, Task.created_at,
+                )
+                .select_from(Task)
+                .join(Project, Project.id == Task.project_id)
+                .join(Area, Area.id == Project.area_id)
+                .outerjoin(User, User.id == Task.assignee_id)
+                .where(*conds)
+                .order_by(Task.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        return {
+            "entity": "tasks",
+            "count": len(rows),
+            "items": [
+                {
+                    "title": t, "project": p, "assignee": a or "(sin asignar)", "status": s,
+                    "priority": pr, "due_date": dd.isoformat() if dd else None,
+                    "created_at": c.isoformat() if c else None,
+                }
+                for (t, p, a, s, pr, dd, c) in rows
+            ],
+        }
+
+    # entity == "projects"
+    conds = [Project.id.in_(pids)]
+    if status:
+        conds.append(Project.status == status)
+    if criticality:
+        conds.append(func.lower(Project.criticality) == criticality.strip().lower())
+    if search:
+        conds.append(func.lower(Project.name).contains(search.strip().lower()))
+    if area:
+        conds.append(Project.area_id == await area_id(area))
+    if owner:
+        uid = await user_id(owner)
+        conds.append(Project.owner_id.is_(None) if uid == "NONE" else Project.owner_id == uid)
+    if pdate(created_after):
+        conds.append(func.date(Project.created_at) >= pdate(created_after))
+    if pdate(created_before):
+        conds.append(func.date(Project.created_at) <= pdate(created_before))
+    if pdate(due_after):
+        conds.append(Project.due_date >= pdate(due_after))
+    if pdate(due_before):
+        conds.append(Project.due_date <= pdate(due_before))
+
+    if group_by:
+        key = {
+            "status": Project.status,
+            "area": Area.name,
+            "owner": func.coalesce(User.name, "(sin dueño)"),
+            "criticality": Project.criticality,
+            "category": Project.category,
+        }.get(group_by)
+        if key is None:
+            return {"error": f"group_by no soportado para proyectos: {group_by}"}
+        rows = (
+            await db.execute(
+                select(key.label("key"), func.count(Project.id).label("n"))
+                .select_from(Project)
+                .join(Area, Area.id == Project.area_id)
+                .outerjoin(User, User.id == Project.owner_id)
+                .where(*conds)
+                .group_by(key)
+                .order_by(func.count(Project.id).desc())
+            )
+        ).all()
+        return {"entity": "projects", "group_by": group_by, "groups": [{"key": k, "count": n} for k, n in rows]}
+
+    rows = (
+        await db.execute(
+            select(
+                Project.name, Area.name, User.name, Project.status, Project.criticality,
+                Project.due_date, Project.created_at,
+            )
+            .select_from(Project)
+            .join(Area, Area.id == Project.area_id)
+            .outerjoin(User, User.id == Project.owner_id)
+            .where(*conds)
+            .order_by(Project.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    return {
+        "entity": "projects",
+        "count": len(rows),
+        "items": [
+            {
+                "name": n, "area": a, "owner": o, "status": s, "criticality": cr,
+                "due_date": dd.isoformat() if dd else None,
+                "created_at": c.isoformat() if c else None,
+            }
+            for (n, a, o, s, cr, dd, c) in rows
+        ],
+    }
+
+
 async def recent_created(db: AsyncSession, user: User, limit: int = 20) -> dict[str, Any]:
     """Proyectos y tareas creados más recientemente (con su área/dueño y a quién se
     asignó cada tarea). Ordenados del más nuevo al más antiguo."""
