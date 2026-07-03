@@ -188,8 +188,10 @@ async def quarterly_tracking(
 ) -> QuarterlyTracking:
     """Proyectos "trabajados" en un trimestre: aquellos cuyo rango [inicio, entrega]
     se cruza con el trimestre. Un proyecto que dura varios trimestres aparece en cada
-    uno. El % de avance es el actual para el trimestre en curso, o el que tenía al
-    cierre (último snapshot <= fin) para trimestres pasados. Segmentado por área."""
+    uno. El % es el **cumplimiento del plan**: avance real a la fecha de referencia
+    (hoy si el trimestre está en curso; el cierre si es pasado) dividido por el avance
+    esperado según el cronograma lineal a esa fecha, topado en 100%. Un proyecto justo
+    al día marca 100%. Segmentado por área."""
     quarter = min(max(quarter, 1), 4)
     q_start, q_end = _quarter_bounds(year, quarter)
     today = date.today()
@@ -213,10 +215,14 @@ async def quarterly_tracking(
         )
     ).all()
 
+    # Fecha de referencia: hoy si el trimestre está en curso/futuro, el cierre si es pasado.
+    ref = min(q_end, today)
+
     starts: list[date] = []
     ends: list[date] = []
     without_dates = 0
-    members: list[tuple[int, str | None, int]] = []  # (id, category, avance actual)
+    members: list[tuple[int, str | None, date, date]] = []  # (id, categoría, inicio, fin)
+    current: dict[int, int] = {}  # avance actual por proyecto
     for pid, category, progress, sd, dd in rows:
         eff_start = sd or dd
         eff_end = dd or sd
@@ -226,15 +232,16 @@ async def quarterly_tracking(
         starts.append(eff_start)
         ends.append(eff_end)
         if eff_start <= q_end and eff_end >= q_start:  # el rango cruza el trimestre
-            members.append((pid, category, progress))
+            members.append((pid, category, eff_start, eff_end))
+            current[pid] = progress
 
     min_year = min(d.year for d in starts) if starts else None
     max_year = max(d.year for d in ends) if ends else None
 
-    # Avance por proyecto. En curso/futuro: avance actual. Pasado: último snapshot
-    # con fecha <= cierre del trimestre; si no hay, cae al avance actual.
-    progress_at: dict[int, int] = {pid: prog for pid, _, prog in members}
-    member_ids = [pid for pid, _, _ in members]
+    # Avance real a la fecha de referencia. Trimestre en curso/futuro: avance actual.
+    # Pasado: último snapshot con fecha <= cierre; si no hay, cae al avance actual.
+    actual: dict[int, int] = dict(current)
+    member_ids = [pid for pid, _, _, _ in members]
     if member_ids and q_end < today:
         snaps = (
             await db.execute(
@@ -249,20 +256,32 @@ async def quarterly_tracking(
             )
         ).all()
         for pid, prog in snaps:  # orden ascendente -> gana el más reciente <= cierre
-            progress_at[pid] = prog
+            actual[pid] = prog
 
-    total = len(members)
-    avg = round(sum(progress_at[pid] for pid, _, _ in members) / total) if total else 0
+    def fulfillment(pid: int, s: date, d: date) -> int:
+        """Cumplimiento = avance real / avance esperado (cronograma lineal a `ref`), tope 100."""
+        if d <= s:  # proyecto puntual: se espera terminado en/tras su fecha
+            expected = 100.0 if ref >= s else 0.0
+        else:
+            frac = (min(ref, d) - s).days / (d - s).days
+            expected = max(0.0, min(1.0, frac)) * 100.0
+        if expected <= 0:  # aún no debía empezar -> nada pendiente
+            return 100
+        return min(100, round(actual[pid] / expected * 100))
+
+    scores = [(category, fulfillment(pid, s, d)) for pid, category, s, d in members]
+    total = len(scores)
+    avg = round(sum(sc for _, sc in scores) / total) if total else 0
 
     by_cat: dict[str, list[int]] = {}
-    for pid, category, _ in members:
+    for category, sc in scores:
         cat = (category or "").strip().upper() or "SIN CATEGORÍA"
-        by_cat.setdefault(cat, []).append(progress_at[pid])
+        by_cat.setdefault(cat, []).append(sc)
     by_category = [
         QuarterCategoryStat(category=c, count=len(v), avg_progress=round(sum(v) / len(v)))
         for c, v in by_cat.items()
     ]
-    by_category.sort(key=lambda s: (-s.count, s.category))
+    by_category.sort(key=lambda stat: (-stat.count, stat.category))
 
     return QuarterlyTracking(
         year=year, quarter=quarter, label=label, start=q_start, end=q_end,

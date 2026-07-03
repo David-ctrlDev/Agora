@@ -67,9 +67,8 @@ export function QuarterlyTracking() {
         </div>
         {d && (
           <span className="ml-auto text-xs text-slate-400">
-            {d.is_current
-              ? "Trimestre en curso · avance actual"
-              : "Cerrado · avance al finalizar el trimestre"}
+            Cumplimiento del plan ·{" "}
+            {d.is_current ? "a hoy (trimestre en curso)" : "al cierre del trimestre"}
           </span>
         )}
       </div>
@@ -89,11 +88,11 @@ export function QuarterlyTracking() {
               <Kpi
                 label="% de avance al finalizar el trimestre"
                 value={`${d.avg_progress}%`}
-                hint={d.is_current ? "avance actual" : "al cierre"}
+                hint="cumplimiento del plan"
                 tone="emerald"
               />
             </div>
-            <Panel title="% de avance por categoría">
+            <Panel title="% de avance por categoría" subtitle="100% = al día con el cronograma">
               {chartItems.length === 0 ? (
                 <p className="py-12 text-center text-sm text-slate-400">
                   Sin proyectos con fechas que crucen este trimestre.
