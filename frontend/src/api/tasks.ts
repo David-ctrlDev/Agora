@@ -66,6 +66,44 @@ export const updateTask = (taskId: number, payload: TaskUpdate) =>
 export const deleteTask = (taskId: number) => api.del<void>(`/api/tasks/${taskId}`);
 export const listMyTasks = () => api.get<Task[]>("/api/tasks/mine");
 
+export interface TaskSummaryItem {
+  id: number;
+  title: string;
+  status: string;
+  priority: string;
+  due_date: string | null;
+  assignee_id: number | null;
+  assignee_name: string | null;
+  project_id: number;
+  project_name: string;
+  area_name: string;
+  overdue: boolean;
+}
+
+export interface TaskGroupStat {
+  key: string;
+  count: number;
+  open: number;
+  overdue: number;
+}
+
+export interface TaskSummary {
+  total: number;
+  open: number;
+  done: number;
+  overdue: number;
+  unassigned: number;
+  by_assignee: TaskGroupStat[];
+  by_area: TaskGroupStat[];
+  by_status: Record<string, number>;
+  items: TaskSummaryItem[];
+}
+
+/** Resumen de todas las tareas (solo admin). */
+export const getAdminTaskSummary = () => api.get<TaskSummary>("/api/admin/tasks");
+/** Resumen de las tareas de los proyectos que lidera el usuario. */
+export const getMyTaskSummary = () => api.get<TaskSummary>("/api/tasks/summary");
+
 export interface Comment {
   id: number;
   body: string;

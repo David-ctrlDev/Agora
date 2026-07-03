@@ -16,8 +16,10 @@ from app.schemas.admin import (
     UserAreasSet,
 )
 from app.schemas.area import AreaCreate, AreaRead
+from app.schemas.task import TaskSummary
 from app.services import admin as admin_svc
 from app.services import areas as areas_service
+from app.services import tasks as tasks_svc
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -30,6 +32,12 @@ async def stats(db: AsyncSession = Depends(get_db)) -> AdminStats:
 @router.get("/activity", response_model=AdminActivity)
 async def activity(limit: int = 10, db: AsyncSession = Depends(get_db)) -> AdminActivity:
     return await admin_svc.recent_activity(db, limit=min(max(limit, 1), 50))
+
+
+@router.get("/tasks", response_model=TaskSummary)
+async def all_tasks(db: AsyncSession = Depends(get_db)) -> TaskSummary:
+    """Resumen de todas las tareas del sistema (a quién, en qué proyecto y área)."""
+    return await tasks_svc.task_summary(db, None)
 
 
 async def _get_user(user_id: int, db: AsyncSession) -> User:

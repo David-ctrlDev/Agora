@@ -39,8 +39,10 @@ import {
   listProjects,
   updateProject,
 } from "../api/projects";
+import { getAdminTaskSummary } from "../api/tasks";
 import { listUsers } from "../api/users";
 import { useMe } from "../auth/useAuth";
+import { TaskSummaryView } from "../components/TaskSummaryView";
 import {
   Badge,
   Button,
@@ -683,10 +685,18 @@ function ProjectsTab() {
   );
 }
 
+function TareasTab() {
+  const q = useQuery({ queryKey: ["admin-tasks"], queryFn: getAdminTaskSummary });
+  if (q.isLoading) return <Spinner label="Cargando tareas…" />;
+  if (!q.data) return null;
+  return <TaskSummaryView data={q.data} />;
+}
+
 const TABS = [
   { key: "resumen", label: "Resumen", icon: LayoutDashboard },
   { key: "actividad", label: "Actividad", icon: Activity },
   { key: "projects", label: "Proyectos", icon: FolderKanban },
+  { key: "tareas", label: "Tareas", icon: ListChecks },
   { key: "users", label: "Usuarios", icon: Users },
   { key: "areas", label: "Áreas", icon: Building2 },
 ] as const;
@@ -731,6 +741,8 @@ export default function AdminPage() {
         <ActividadTab />
       ) : tab === "projects" ? (
         <ProjectsTab />
+      ) : tab === "tareas" ? (
+        <TareasTab />
       ) : tab === "users" ? (
         <UsersTab />
       ) : (

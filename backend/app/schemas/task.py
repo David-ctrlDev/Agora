@@ -44,3 +44,36 @@ class TaskRead(BaseModel):
     updated_at: datetime
     assignee_name: str | None = None
     project_name: str | None = None
+
+
+class TaskSummaryItem(BaseModel):
+    id: int
+    title: str
+    status: str
+    priority: str
+    due_date: date | None
+    assignee_id: int | None
+    assignee_name: str | None
+    project_id: int
+    project_name: str
+    area_name: str
+    overdue: bool
+
+
+class TaskGroupStat(BaseModel):
+    key: str
+    count: int
+    open: int
+    overdue: int
+
+
+class TaskSummary(BaseModel):
+    total: int
+    open: int
+    done: int
+    overdue: int
+    unassigned: int
+    by_assignee: list[TaskGroupStat]
+    by_area: list[TaskGroupStat]
+    by_status: dict[str, int]
+    items: list[TaskSummaryItem]

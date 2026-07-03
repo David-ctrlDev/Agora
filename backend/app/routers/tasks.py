@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.project import Project
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.schemas.task import TaskCreate, TaskRead, TaskSummary, TaskUpdate
 from app.services import audit
 from app.services import projects as projects_svc
 from app.services import tasks as svc
@@ -29,6 +30,20 @@ async def my_tasks(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[TaskRead]:
     return await svc.list_my_tasks(db, user)
+
+
+@router.get("/tasks/summary", response_model=TaskSummary)
+async def tasks_summary(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> TaskSummary:
+    """Resumen de las tareas de los proyectos que el usuario lidera (es dueño)."""
+    owned = [
+        r[0]
+        for r in (
+            await db.execute(select(Project.id).where(Project.owner_id == user.id))
+        ).all()
+    ]
+    return await svc.task_summary(db, owned)
 
 
 @router.get("/projects/{project_id}/tasks", response_model=list[TaskRead])

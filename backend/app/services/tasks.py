@@ -1,14 +1,23 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.deps import get_user_area_ids
+from app.models.area import Area
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.task import Task
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.schemas.task import (
+    TaskCreate,
+    TaskGroupStat,
+    TaskRead,
+    TaskSummary,
+    TaskSummaryItem,
+    TaskUpdate,
+)
 
 
 def _to_read(
@@ -127,3 +136,75 @@ async def list_my_tasks(db: AsyncSession, user: User) -> list[TaskRead]:
     stmt = stmt.where(Task.status != "done").order_by(Task.due_date.is_(None), Task.due_date)
     rows = (await db.execute(stmt)).all()
     return [_to_read(task, assignee_name, project_name) for (task, assignee_name, project_name) in rows]
+
+
+async def task_summary(db: AsyncSession, project_ids: list[int] | None) -> TaskSummary:
+    """Resumen de tareas: a quién, en qué proyecto y área, con agregados por
+    responsable, área y estado. `project_ids=None` -> todas (uso admin);
+    una lista -> acota a esos proyectos (p. ej. los que lidera un dueño)."""
+    empty = TaskSummary(
+        total=0, open=0, done=0, overdue=0, unassigned=0,
+        by_assignee=[], by_area=[], by_status={}, items=[],
+    )
+    if project_ids is not None and not project_ids:
+        return empty
+
+    assignee = aliased(User)
+    stmt = (
+        select(
+            Task.id, Task.title, Task.status, Task.priority, Task.due_date,
+            Task.assignee_id, assignee.name, Task.project_id, Project.name, Area.name,
+        )
+        .join(Project, Project.id == Task.project_id)
+        .join(Area, Area.id == Project.area_id)
+        .outerjoin(assignee, assignee.id == Task.assignee_id)
+    )
+    if project_ids is not None:
+        stmt = stmt.where(Task.project_id.in_(project_ids))
+    rows = (await db.execute(stmt)).all()
+
+    today = date.today()
+    items: list[TaskSummaryItem] = []
+    for tid, title, st, prio, due, aid, aname, pid, pname, arname in rows:
+        overdue = due is not None and due < today and st != "done"
+        items.append(
+            TaskSummaryItem(
+                id=tid, title=title, status=st, priority=prio, due_date=due,
+                assignee_id=aid, assignee_name=aname, project_id=pid,
+                project_name=pname, area_name=arname, overdue=overdue,
+            )
+        )
+    # Vencidas primero, luego por fecha (sin fecha al final), luego por título.
+    items.sort(key=lambda t: (not t.overdue, t.due_date is None, t.due_date or date.max, t.title.lower()))
+
+    done = sum(1 for t in items if t.status == "done")
+    by_status: dict[str, int] = {}
+    for t in items:
+        by_status[t.status] = by_status.get(t.status, 0) + 1
+
+    def group(key_of) -> list[TaskGroupStat]:
+        agg: dict[str, dict[str, int]] = {}
+        for t in items:
+            k = key_of(t)
+            d = agg.setdefault(k, {"count": 0, "open": 0, "overdue": 0})
+            d["count"] += 1
+            if t.status != "done":
+                d["open"] += 1
+            if t.overdue:
+                d["overdue"] += 1
+        return sorted(
+            (TaskGroupStat(key=k, **v) for k, v in agg.items()),
+            key=lambda s: (-s.count, s.key),
+        )
+
+    return TaskSummary(
+        total=len(items),
+        open=len(items) - done,
+        done=done,
+        overdue=sum(1 for t in items if t.overdue),
+        unassigned=sum(1 for t in items if t.assignee_id is None),
+        by_assignee=group(lambda t: t.assignee_name or "Sin asignar"),
+        by_area=group(lambda t: t.area_name),
+        by_status=by_status,
+        items=items,
+    )

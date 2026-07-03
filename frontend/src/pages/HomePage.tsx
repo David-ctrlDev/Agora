@@ -12,7 +12,7 @@ import { Link } from "react-router-dom";
 import { CRITICALITY_META } from "../api/analytics";
 import { listNotifications } from "../api/notifications";
 import { PROJECT_STATUS, type Project, listProjects } from "../api/projects";
-import { TASK_PRIORITY, listMyTasks } from "../api/tasks";
+import { TASK_PRIORITY, getMyTaskSummary, listMyTasks } from "../api/tasks";
 import { useMe } from "../auth/useAuth";
 import { Donut, ProgressRing } from "../components/charts";
 import { Badge, Card, Kpi, PageHeader, Panel, Spinner } from "../components/ui";
@@ -66,6 +66,7 @@ export default function HomePage() {
   const me = useMe();
   const projectsQuery = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const myTasks = useQuery({ queryKey: ["my-tasks"], queryFn: listMyTasks });
+  const leadTasks = useQuery({ queryKey: ["my-task-summary"], queryFn: getMyTaskSummary });
   const notifications = useQuery({ queryKey: ["notifications"], queryFn: listNotifications });
 
   const allProjects = projectsQuery.data ?? [];
@@ -261,6 +262,41 @@ export default function HomePage() {
           )}
         </Panel>
       </div>
+
+      {leadTasks.data && leadTasks.data.total > 0 && (
+        <Panel
+          title="Tareas de mis proyectos"
+          subtitle="Resumen por responsable de los proyectos que lideras"
+          actions={<Link to="/proyectos" className="text-xs font-medium text-brand-600 hover:underline">Ver proyectos</Link>}
+        >
+          <div className="grid gap-5 sm:grid-cols-[240px_1fr]">
+            <div className="flex flex-col justify-center gap-1.5">
+              <div className="text-sm text-slate-600">
+                <span className="text-3xl font-semibold text-slate-900">{leadTasks.data.total}</span> tareas
+              </div>
+              <div className="text-sm text-slate-500">
+                {leadTasks.data.open} abiertas
+                {leadTasks.data.overdue > 0 && (
+                  <>
+                    {" · "}
+                    <span className="font-medium text-red-600">{leadTasks.data.overdue} vencidas</span>
+                  </>
+                )}
+              </div>
+              {leadTasks.data.unassigned > 0 && (
+                <div className="text-xs text-slate-400">{leadTasks.data.unassigned} sin asignar</div>
+              )}
+            </div>
+            <MiniBars
+              items={leadTasks.data.by_assignee.slice(0, 8).map((g, i) => ({
+                label: g.overdue > 0 ? `${g.key} · ${g.overdue} venc.` : g.key,
+                value: g.count,
+                color: PALETTE[i % PALETTE.length],
+              }))}
+            />
+          </div>
+        </Panel>
+      )}
 
       {alerts.length > 0 && (
         <Card className="p-5">
