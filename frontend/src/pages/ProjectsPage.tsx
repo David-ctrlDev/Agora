@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutGrid, List, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown, LayoutGrid, List, Plus, Search, X } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -112,6 +112,55 @@ export default function ProjectsPage() {
         (!dateTo || (p.due_date != null && p.due_date <= dateTo)),
     );
   }, [projects, scope, search, areaFilter, statusFilter, ownerFilter, dateFrom, dateTo]);
+
+  type SortKey =
+    | "name"
+    | "status"
+    | "progress"
+    | "start_date"
+    | "due_date"
+    | "owner_name"
+    | "category"
+    | "criticality"
+    | "project_type"
+    | "process";
+  const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+    { key: "name", label: "Proyecto" },
+    { key: "status", label: "Estado" },
+    { key: "progress", label: "Avance" },
+    { key: "start_date", label: "Inicio" },
+    { key: "due_date", label: "Entrega" },
+    { key: "owner_name", label: "Líder" },
+    { key: "category", label: "Categoría" },
+    { key: "criticality", label: "Criticidad" },
+    { key: "project_type", label: "Tipo" },
+    { key: "process", label: "Proceso" },
+  ];
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered;
+    const key = sortKey;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const va = a[key];
+      const vb = b[key];
+      const na = va == null || va === "";
+      const nb = vb == null || vb === "";
+      if (na && nb) return 0;
+      if (na) return 1; // nulos siempre al final
+      if (nb) return -1;
+      if (key === "progress") return ((va as number) - (vb as number)) * dir;
+      return String(va).localeCompare(String(vb), "es", { numeric: true }) * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const mineCount = useMemo(() => projects.filter((p) => p.is_mine).length, [projects]);
 
@@ -346,20 +395,34 @@ export default function ProjectsPage() {
                 <table className="w-full min-w-[1080px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <th className="px-3 py-2.5">Proyecto</th>
-                      <th className="px-3 py-2.5">Estado</th>
-                      <th className="px-3 py-2.5">Avance</th>
-                      <th className="px-3 py-2.5">Inicio</th>
-                      <th className="px-3 py-2.5">Entrega</th>
-                      <th className="px-3 py-2.5">Líder</th>
-                      <th className="px-3 py-2.5">Categoría</th>
-                      <th className="px-3 py-2.5">Criticidad</th>
-                      <th className="px-3 py-2.5">Tipo</th>
-                      <th className="px-3 py-2.5">Proceso</th>
+                      {SORT_COLUMNS.map((col) => {
+                        const active = sortKey === col.key;
+                        return (
+                          <th key={col.key} className="px-3 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort(col.key)}
+                              title={`Ordenar por ${col.label}`}
+                              className={`inline-flex items-center gap-1 uppercase tracking-wide transition hover:text-slate-700 ${active ? "text-slate-800" : ""}`}
+                            >
+                              {col.label}
+                              {active ? (
+                                sortDir === "asc" ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3" />
+                                )
+                              ) : (
+                                <ChevronsUpDown className="h-3 w-3 text-slate-300" />
+                              )}
+                            </button>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filtered.map((p: Project) => {
+                    {sorted.map((p: Project) => {
                       const st = PROJECT_STATUS[p.status] ?? { label: p.status, tone: "neutral" as const };
                       const crit = (p.criticality ?? "").toUpperCase();
                       const overdue =
