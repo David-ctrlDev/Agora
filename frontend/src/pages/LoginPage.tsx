@@ -49,6 +49,14 @@ export default function LoginPage() {
 
   const params = new URLSearchParams(window.location.search);
   const error = ERROR_MESSAGES[params.get("error") ?? ""];
+  const expired = params.get("expired");
+  const notice =
+    error ??
+    (expired === "idle"
+      ? "Tu sesión se cerró por inactividad. Vuelve a iniciar sesión."
+      : expired
+        ? "Tu sesión expiró. Vuelve a iniciar sesión."
+        : null);
   const [stage, setStage] = useState<"signin" | "2fa">(params.get("2fa") === "1" ? "2fa" : "signin");
   const [code, setCode] = useState("");
 
@@ -159,9 +167,9 @@ export default function LoginPage() {
             <h1 className="text-center text-lg font-semibold text-white">Bienvenido de nuevo</h1>
             <p className="mt-1 text-center text-sm text-slate-400">Accede a tu cartera de proyectos.</p>
 
-            {error && (
+            {notice && (
               <div className="mt-5 rounded-xl border border-red-400/20 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-200">
-                {error}
+                {notice}
               </div>
             )}
 

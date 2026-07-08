@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "agora_session"
     session_cookie_secure: bool = False
     session_cookie_samesite: str = "lax"
-    session_max_age_seconds: int = 604800
+    session_max_age_seconds: int = 86400  # 1 día (máximo absoluto de la sesión)
 
     # Login (Google OAuth, Fase 3)
     google_allowed_hd: str = "invesa.com"

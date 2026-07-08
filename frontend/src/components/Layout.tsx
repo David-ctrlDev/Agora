@@ -20,6 +20,7 @@ import { unreadCount } from "../api/notifications";
 import { useLogout, useMe } from "../auth/useAuth";
 import FloatingAgent from "./FloatingAgent";
 import GoogleConnect from "./GoogleConnect";
+import SessionManager from "./SessionManager";
 
 const navItems = [
   { to: "/inicio", label: "Inicio", icon: LayoutDashboard },
@@ -85,6 +86,7 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
+      <SessionManager />
       {/* Backdrop del drawer (solo móvil) */}
       {mobileOpen && (
         <div

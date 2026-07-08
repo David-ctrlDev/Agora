@@ -11,6 +11,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+    // Sesión expirada a mitad de uso: manda al login limpio. Se excluyen los
+    // endpoints de auth (p. ej. /me al arrancar sin sesión, que RequireAuth ya
+    // maneja) y la propia pantalla de login, para no marcar "expiró" a quien
+    // nunca entró.
+    if (
+      res.status === 401 &&
+      !path.startsWith("/api/auth/") &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      window.location.assign("/login?expired=1");
+    }
     let detail = res.statusText;
     try {
       const body = (await res.json()) as { detail?: unknown };
