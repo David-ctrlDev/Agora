@@ -80,7 +80,7 @@ function UsersTab() {
   const [eEmail, setEEmail] = useState("");
   const [eRole, setERole] = useState("member");
   const [eActive, setEActive] = useState(true);
-  const [eAreas, setEAreas] = useState<number[]>([]);
+  const [eAreaRoles, setEAreaRoles] = useState<Record<number, string>>({});
 
   const openEdit = (u: AdminUser) => {
     setEditUser(u);
@@ -88,7 +88,7 @@ function UsersTab() {
     setEEmail(u.email);
     setERole(u.role);
     setEActive(u.is_active);
-    setEAreas(u.areas.map((a) => a.area_id));
+    setEAreaRoles(Object.fromEntries(u.areas.map((a) => [a.area_id, a.area_role])));
   };
 
   const create = useMutation({
@@ -110,7 +110,13 @@ function UsersTab() {
         role: eRole,
         is_active: eActive,
       });
-      return setUserAreas(editUser!.id, eAreas.map((area_id) => ({ area_id, area_role: "member" })));
+      return setUserAreas(
+        editUser!.id,
+        Object.entries(eAreaRoles).map(([area_id, area_role]) => ({
+          area_id: Number(area_id),
+          area_role,
+        })),
+      );
     },
     onSuccess: () => {
       invalidate();
@@ -267,19 +273,33 @@ function UsersTab() {
             </div>
           </div>
           <div>
-            <div className="mb-1.5 text-sm font-medium text-slate-700">Áreas</div>
-            <div className="flex flex-wrap gap-2">
+            <div className="mb-1.5 text-sm font-medium text-slate-700">Áreas y rol</div>
+            <div className="space-y-1.5">
               {allAreas.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => setEAreas((l) => toggle(l, a.id))}
-                  className={`rounded-full px-3 py-1 text-sm font-medium transition ${eAreas.includes(a.id) ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-                >
-                  {a.name}
-                </button>
+                <div key={a.id} className="flex items-center justify-between gap-3">
+                  <span className="truncate text-sm text-slate-700">{a.name}</span>
+                  <Select
+                    className="h-8 w-52 shrink-0 text-xs"
+                    value={eAreaRoles[a.id] ?? ""}
+                    onChange={(e) =>
+                      setEAreaRoles((prev) => {
+                        const next = { ...prev };
+                        if (e.target.value === "") delete next[a.id];
+                        else next[a.id] = e.target.value;
+                        return next;
+                      })
+                    }
+                  >
+                    <option value="">Sin acceso</option>
+                    <option value="member">Miembro</option>
+                    <option value="lead">Administrador de área</option>
+                  </Select>
+                </div>
               ))}
             </div>
+            <p className="mt-2 text-xs text-slate-400">
+              "Administrador de área" puede gestionar los proyectos, tareas y miembros de esa área.
+            </p>
           </div>
           {editUser?.twofa_enabled && (
             <div className="flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-sm">
