@@ -5,6 +5,7 @@ from app.routers import (
     admin,
     agent,
     analytics,
+    area_admin,
     area_requests,
     areas,
     audit,
@@ -41,6 +42,7 @@ app.include_router(economics.router)
 app.include_router(audit.router)
 app.include_router(users.router)
 app.include_router(admin.router)
+app.include_router(area_admin.router)
 app.include_router(catalog.router)
 
 
