@@ -6,10 +6,13 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  size?: "md" | "lg" | "xl";
   children: ReactNode;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+const MAX_W = { md: "max-w-md", lg: "max-w-lg", xl: "max-w-xl" } as const;
+
+export function Modal({ open, onClose, title, size = "lg", children }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -30,7 +33,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       onClick={onClose}
     >
       <div
-        className="my-auto flex max-h-[90vh] w-full max-w-lg animate-fade-in flex-col rounded-2xl bg-white shadow-pop"
+        className={`my-auto flex max-h-[90vh] w-full ${MAX_W[size]} animate-fade-in flex-col rounded-2xl bg-white shadow-pop`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

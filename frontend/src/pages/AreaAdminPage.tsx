@@ -186,7 +186,7 @@ function MiembrosTab() {
               {allUsers.map((u) => (<option key={u.id} value={u.id}>{u.name}</option>))}
             </Select>
           </div>
-          <div className="w-40">
+          <div className="w-56">
             <Select label="Rol" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="member">Miembro</option>
               <option value="lead">Administrador de área</option>
@@ -222,7 +222,7 @@ function MiembrosTab() {
                     <td className="px-4 py-2.5 text-slate-600">{m.area_name}</td>
                     <td className="px-4 py-2.5">
                       <Select
-                        className="h-8 w-44 text-xs"
+                        className="h-8 w-52 text-xs"
                         value={m.area_role === "lead" || m.area_role === "admin" ? "lead" : "member"}
                         onChange={(e) => changeRole.mutate({ aId: m.area_id, uId: m.user_id, r: e.target.value })}
                       >

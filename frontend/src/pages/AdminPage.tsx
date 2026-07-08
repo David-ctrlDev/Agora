@@ -246,7 +246,7 @@ function UsersTab() {
         </div>
       </Card>
 
-      <Modal open={editUser !== null} onClose={() => setEditUser(null)} title={`Editar ${editUser?.email ?? ""}`}>
+      <Modal open={editUser !== null} onClose={() => setEditUser(null)} title={`Editar ${editUser?.email ?? ""}`} size="xl">
         <div className="space-y-4">
           <Input label="Nombre" value={eName} onChange={(e) => setEName(e.target.value)} />
           <Input
@@ -276,10 +276,10 @@ function UsersTab() {
             <div className="mb-1.5 text-sm font-medium text-slate-700">Áreas y rol</div>
             <div className="space-y-1.5">
               {allAreas.map((a) => (
-                <div key={a.id} className="flex items-center justify-between gap-3">
+                <div key={a.id} className="grid grid-cols-[1fr_15rem] items-center gap-3">
                   <span className="truncate text-sm text-slate-700">{a.name}</span>
                   <Select
-                    className="h-8 w-52 shrink-0 text-xs"
+                    className="h-9 text-sm"
                     value={eAreaRoles[a.id] ?? ""}
                     onChange={(e) =>
                       setEAreaRoles((prev) => {
