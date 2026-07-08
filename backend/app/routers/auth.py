@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, is_superadmin
 from app.core import totp
 from app.core.crypto import decrypt, encrypt
 from app.core.security import (
@@ -60,6 +60,7 @@ async def _current_user_payload(db: AsyncSession, user: User) -> CurrentUser:
         email=user.email,
         name=user.name,
         role=user.role,
+        is_superadmin=is_superadmin(user),
         avatar_url=user.avatar_url,
         areas=[AreaMembership(id=a.id, name=a.name, slug=a.slug, area_role=r) for a, r in areas],
         twofa_enabled=user.totp_enabled,
@@ -102,7 +103,7 @@ async def dev_users(db: AsyncSession = Depends(get_db)) -> list[DevUser]:
     out: list[DevUser] = []
     for u in users:
         areas = await auth_service.accessible_areas(db, u)
-        labels = ["Todas"] if u.role == "admin" else [a.name for a, _ in areas]
+        labels = ["Todas"] if is_superadmin(u) else [a.name for a, _ in areas]
         out.append(DevUser(id=u.id, email=u.email, name=u.name, role=u.role, areas=labels))
     return out
 

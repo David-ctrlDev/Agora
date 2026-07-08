@@ -574,8 +574,8 @@ async def execute_delete_project(db: AsyncSession, user: User, params: dict[str,
     project = await _resolve_project(db, user, params.get("project_name"))
     if project is None:
         return {"ok": False, "error": f"no identifiqué el proyecto «{params.get('project_name', '')}»."}
-    if not (user.role == "admin" or project.owner_id == user.id):
-        return {"ok": False, "error": f"solo el propietario o un admin puede eliminar «{project.name}»."}
+    if not await projects_svc.can_manage(db, user, project):
+        return {"ok": False, "error": f"no tienes permiso para eliminar «{project.name}»."}
     name = project.name
     await projects_svc.delete_project(db, project)
     return {"ok": True, "name": name}
@@ -753,7 +753,9 @@ async def execute_delete_sprint(db: AsyncSession, user: User, params: dict[str, 
 # Administración (áreas y usuarios) — solo para administradores globales.
 # ---------------------------------------------------------------------------
 def _is_admin(user: User) -> bool:
-    return user.role == "admin"
+    from app.core.deps import is_superadmin
+
+    return is_superadmin(user)
 
 
 async def _resolve_area(db: AsyncSession, area_name: str | None):

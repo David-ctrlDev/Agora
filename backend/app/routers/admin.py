@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import require_admin
+from app.core.deps import require_superadmin
 from app.models.area import Area
 from app.models.user import User
 from app.schemas.admin import (
@@ -23,7 +23,7 @@ from app.services import areas as areas_service
 from app.services import catalog as catalog_svc
 from app.services import tasks as tasks_svc
 
-router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_superadmin)])
 
 
 @router.get("/stats", response_model=AdminStats)

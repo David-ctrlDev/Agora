@@ -13,6 +13,7 @@ class CurrentUser(BaseModel):
     email: str
     name: str
     role: str
+    is_superadmin: bool = False
     avatar_url: str | None
     areas: list[AreaMembership]
     twofa_enabled: bool = False

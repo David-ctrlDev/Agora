@@ -22,15 +22,52 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     return user
 
 
-async def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requiere administrador")
+# Roles por área que otorgan administración del área (además de la visibilidad).
+AREA_ADMIN_ROLES = ("lead", "admin")
+
+
+def is_superadmin(user: User) -> bool:
+    """Super administrador global. Se define por CONFIGURACIÓN (lista de correos),
+    no por un rol en la BD, para que nadie se vuelva super admin por error."""
+    return (user.email or "").strip().lower() in settings.superadmin_email_set
+
+
+async def require_superadmin(user: User = Depends(get_current_user)) -> User:
+    if not is_superadmin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Requiere super administrador"
+        )
     return user
 
 
 async def get_user_area_ids(db: AsyncSession, user: User) -> list[int] | None:
-    """IDs de áreas accesibles por el usuario. None = sin restricción (admin global)."""
-    if user.role == "admin":
+    """IDs de áreas VISIBLES por el usuario. None = sin restricción (super admin)."""
+    if is_superadmin(user):
         return None
     result = await db.execute(select(UserArea.area_id).where(UserArea.user_id == user.id))
     return [row[0] for row in result.all()]
+
+
+async def admin_area_ids(db: AsyncSession, user: User) -> list[int] | None:
+    """IDs de áreas que el usuario ADMINISTRA. None = todas (super admin).
+    Un administrador de área es quien tiene rol de área lead/admin en esa área."""
+    if is_superadmin(user):
+        return None
+    result = await db.execute(
+        select(UserArea.area_id).where(
+            UserArea.user_id == user.id, UserArea.area_role.in_(AREA_ADMIN_ROLES)
+        )
+    )
+    return [row[0] for row in result.all()]
+
+
+async def require_area_admin(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> User:
+    """Permite super admin o cualquier administrador de área (de ≥1 área)."""
+    ids = await admin_area_ids(db, user)
+    if ids is None or len(ids) > 0:
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="Requiere administrador de área"
+    )

@@ -4,9 +4,11 @@ y aprobación por el líder del área (area_role='lead') o un admin global.
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.deps import is_superadmin
 from app.models.area import Area
 from app.models.area_request import AreaJoinRequest
 from app.models.notification import Notification
@@ -158,7 +160,7 @@ async def request_new_area(
 
 # ─────────────────────────── decisiones ───────────────────────────
 async def _can_approve(db: AsyncSession, approver: User, req: AreaJoinRequest) -> bool:
-    if approver.role == "admin":
+    if is_superadmin(approver):
         return True
     if req.kind == "join" and req.area_id is not None:
         ua = await db.get(UserArea, {"user_id": approver.id, "area_id": req.area_id})
@@ -230,7 +232,11 @@ async def _notify(db: AsyncSession, user_ids: list[int], area_id: int | None, nt
 
 
 async def _admin_ids(db: AsyncSession) -> list[int]:
-    return list((await db.execute(select(User.id).where(User.role == "admin"))).scalars().all())
+    emails = list(settings.superadmin_email_set)
+    if not emails:
+        return []
+    rows = await db.execute(select(User.id).where(func.lower(User.email).in_(emails)))
+    return list(rows.scalars().all())
 
 
 async def _notify_join_approvers(db: AsyncSession, req: AreaJoinRequest, area: Area, requester: User) -> None:

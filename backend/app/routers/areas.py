@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, get_user_area_ids, require_admin
+from app.core.deps import get_current_user, get_user_area_ids, require_superadmin
 from app.models.area import Area
 from app.models.user import User
 from app.schemas.area import AreaCreate, AreaRead
@@ -22,7 +22,7 @@ async def list_areas(
 @router.post("", response_model=AreaRead, status_code=status.HTTP_201_CREATED)
 async def create_area(
     payload: AreaCreate,
-    _: User = Depends(require_admin),
+    _: User = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db),
 ) -> Area:
     try:

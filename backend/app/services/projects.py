@@ -1,7 +1,7 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_user_area_ids
+from app.core.deps import admin_area_ids, get_user_area_ids, is_superadmin
 from app.models.area import Area
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -81,7 +81,7 @@ async def get_project(db: AsyncSession, project_id: int) -> Project | None:
 
 
 async def can_access(db: AsyncSession, user: User, project: Project) -> bool:
-    if user.role == "admin":
+    if is_superadmin(user):
         return True
     area_ids = await get_user_area_ids(db, user)
     if area_ids and project.area_id in area_ids:
@@ -91,10 +91,23 @@ async def can_access(db: AsyncSession, user: User, project: Project) -> bool:
 
 
 async def can_edit(db: AsyncSession, user: User, project: Project) -> bool:
-    if user.role == "admin" or project.owner_id == user.id:
+    if is_superadmin(user) or project.owner_id == user.id:
+        return True
+    # Un administrador del área del proyecto puede editar cualquier proyecto de su área.
+    admin_ids = await admin_area_ids(db, user)
+    if admin_ids is None or project.area_id in admin_ids:
         return True
     member = await db.get(ProjectMember, {"project_id": project.id, "user_id": user.id})
     return member is not None and member.role in ("owner", "editor")
+
+
+async def can_manage(db: AsyncSession, user: User, project: Project) -> bool:
+    """Administrar el proyecto (borrar, reasignar dueño): super admin, el dueño, o
+    un administrador del área del proyecto."""
+    if is_superadmin(user) or project.owner_id == user.id:
+        return True
+    admin_ids = await admin_area_ids(db, user)  # None solo si super admin (ya cubierto)
+    return admin_ids is not None and project.area_id in admin_ids
 
 
 async def to_read(db: AsyncSession, project: Project) -> ProjectRead:

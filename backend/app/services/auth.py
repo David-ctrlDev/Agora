@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.deps import is_superadmin
 from app.models.area import Area
 from app.models.user import User
 from app.models.user_area import UserArea
@@ -21,9 +22,9 @@ def _auto_provision_allowed(email: str) -> bool:
 async def accessible_areas(db: AsyncSession, user: User) -> list[tuple[Area, str]]:
     """Áreas accesibles por el usuario, con su rol en cada una.
 
-    Admin global: todas las áreas activas (rol 'admin'). Miembro: sus `user_areas`.
+    Super admin: todas las áreas activas. Resto: sus `user_areas`.
     """
-    if user.role == "admin":
+    if is_superadmin(user):
         result = await db.execute(
             select(Area).where(Area.is_active.is_(True)).order_by(Area.name)
         )

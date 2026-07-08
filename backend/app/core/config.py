@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # en el primer login). Si es False, solo entran usuarios ya creados (lista blanca).
     google_auto_provision: bool = True
     bootstrap_admin_emails: str = ""
+    # Super administradores globales (ven y gestionan todo). Fijados por configuración,
+    # no por un rol en BD, para que nadie se vuelva super admin por error. Coma-separado.
+    superadmin_emails: str = "wserna@invesa.com"
 
     # Integraciones externas — proveedor "mock" (sin red) o "real" (con credenciales).
     github_provider: str = "mock"
@@ -70,6 +73,10 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.env == "development"
+
+    @property
+    def superadmin_email_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.superadmin_emails.split(",") if e.strip()}
 
 
 settings = Settings()

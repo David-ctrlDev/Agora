@@ -85,9 +85,10 @@ async def delete_project(
     project_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> None:
     project = await _accessible_project(project_id, user, db)
-    if not (user.role == "admin" or project.owner_id == user.id):
+    if not await svc.can_manage(db, user, project):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Solo el propietario o un admin"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el propietario, un admin del área o el super admin",
         )
     await svc.delete_project(db, project)
 
