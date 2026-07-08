@@ -710,10 +710,10 @@ export default function AdminPage() {
   const me = useMe();
   const [tab, setTab] = useState<AdminTab>("resumen");
 
-  if (me.data && me.data.role !== "admin") {
+  if (me.data && !me.data.is_superadmin) {
     return (
       <Panel>
-        <p className="text-sm text-slate-500">Esta sección es solo para administradores.</p>
+        <p className="text-sm text-slate-500">Esta sección es solo para el super administrador.</p>
       </Panel>
     );
   }

@@ -5,6 +5,7 @@ import RequireAuth from "./components/RequireAuth";
 import AdminPage from "./pages/AdminPage";
 import AgentPage from "./pages/AgentPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import AreaAdminPage from "./pages/AreaAdminPage";
 import AreasPage from "./pages/AreasPage";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/notificaciones" element={<NotificationsPage />} />
           <Route path="/seguridad" element={<SecurityPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/area-admin" element={<AreaAdminPage />} />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Route>
       </Route>

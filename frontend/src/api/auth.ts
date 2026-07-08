@@ -12,6 +12,7 @@ export interface CurrentUser {
   email: string;
   name: string;
   role: string;
+  is_superadmin: boolean;
   avatar_url: string | null;
   areas: AreaMembership[];
   twofa_enabled: boolean;
