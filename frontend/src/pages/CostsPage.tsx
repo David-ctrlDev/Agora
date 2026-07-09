@@ -278,9 +278,12 @@ export default function CostsPage() {
     { label: "Caché", value: d.breakdown.cached, color: "#94a3b8" },
     { label: "Salida", value: d.breakdown.output, color: "#10b981" },
     { label: "Pensamiento", value: d.breakdown.thoughts, color: "#8b5cf6" },
+    { label: "Herramientas", value: d.breakdown.tools, color: "#f59e0b" },
+    ...(d.breakdown.others > 0
+      ? [{ label: "Sin desglosar", value: d.breakdown.others, color: "#cbd5e1" }]
+      : []),
   ];
-  const breakdownTotal =
-    d.breakdown.input + d.breakdown.cached + d.breakdown.output + d.breakdown.thoughts;
+  const breakdownTotal = tokenSegments.reduce((s, x) => s + x.value, 0);
 
   return (
     <div className="space-y-5">

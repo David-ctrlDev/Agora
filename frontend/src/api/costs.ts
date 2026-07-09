@@ -24,6 +24,8 @@ export interface TokenBreakdown {
   cached: number;
   output: number;
   thoughts: number;
+  tools: number;
+  others: number;
 }
 
 export interface CostSummary {

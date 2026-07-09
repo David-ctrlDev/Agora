@@ -25,6 +25,8 @@ class TokenBreakdown(BaseModel):
     cached: int  # contexto cacheado
     output: int  # respuesta
     thoughts: int  # razonamiento
+    tools: int  # herramientas (tool_use_prompt)
+    others: int  # residuo del total reportado por Google aún sin desglosar
 
 
 class CostSummary(BaseModel):

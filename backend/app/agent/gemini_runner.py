@@ -33,14 +33,16 @@ async def _record_usage(
     *,
     thoughts: int = 0,
     cached: int = 0,
+    tool_use: int = 0,
 ) -> None:
     """Registra el consumo de una llamada al modelo con costo estimado según la
     tarifa en BD (módulo de Costos), replicando la facturación de Google:
     - entrada: (prompt - caché) a tarifa de entrada + caché a tarifa de caché
       (si no hay tarifa de caché definida, el caché se cobra como entrada);
+    - herramientas (tool_use_prompt_token_count): a tarifa de entrada;
     - salida: candidatos + tokens de pensamiento, a tarifa de salida.
     Best-effort en su propia sesión: nunca debe romper la conversación."""
-    if not (prompt or output or thoughts or total):
+    if not (prompt or output or thoughts or tool_use or total):
         return
     try:
         async with SessionLocal() as db:
@@ -56,7 +58,7 @@ async def _record_usage(
                     else pricing.input_per_1m
                 )
                 cost = (
-                    (prompt - cached) / 1_000_000 * pricing.input_per_1m
+                    (prompt - cached + tool_use) / 1_000_000 * pricing.input_per_1m
                     + cached / 1_000_000 * cached_rate
                     + (output + thoughts) / 1_000_000 * pricing.output_per_1m
                 )
@@ -68,7 +70,8 @@ async def _record_usage(
                     output_tokens=output,
                     thought_tokens=thoughts,
                     cached_tokens=cached,
-                    total_tokens=total or (prompt + output + thoughts),
+                    tool_tokens=tool_use,
+                    total_tokens=total or (prompt + output + thoughts + tool_use),
                     cost_usd=round(cost, 6),
                 )
             )
@@ -570,6 +573,7 @@ async def run_turn(
                 int(getattr(um, "total_token_count", 0) or 0),
                 thoughts=int(getattr(um, "thoughts_token_count", 0) or 0),
                 cached=int(getattr(um, "cached_content_token_count", 0) or 0),
+                tool_use=int(getattr(um, "tool_use_prompt_token_count", 0) or 0),
             )
         return resp
 

@@ -44,7 +44,7 @@ async def summary(db: AsyncSession) -> CostSummary:
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     projection = float(month[0] or 0) / today.day * days_in_month
 
-    # Desglose de tokens (entrada sin caché / caché / salida / pensamiento).
+    # Desglose de tokens (entrada sin caché / caché / salida / pensamiento / herramientas).
     bd = (
         await db.execute(
             select(
@@ -52,11 +52,21 @@ async def summary(db: AsyncSession) -> CostSummary:
                 func.coalesce(func.sum(U.cached_tokens), 0),
                 func.coalesce(func.sum(U.output_tokens), 0),
                 func.coalesce(func.sum(U.thought_tokens), 0),
+                func.coalesce(func.sum(U.tool_tokens), 0),
             )
         )
     ).one()
+    classified = int(bd[0] or 0) + int(bd[1] or 0) + int(bd[2] or 0) + int(bd[3] or 0) + int(bd[4] or 0)
+    # Residuo: lo que el total de Google trae por encima de lo desglosado (p. ej.
+    # filas registradas antes de capturar herramientas). Así la dona siempre cuadra.
+    others = max(0, int(totals[1] or 0) - classified)
     breakdown = TokenBreakdown(
-        input=int(bd[0] or 0), cached=int(bd[1] or 0), output=int(bd[2] or 0), thoughts=int(bd[3] or 0)
+        input=int(bd[0] or 0),
+        cached=int(bd[1] or 0),
+        output=int(bd[2] or 0),
+        thoughts=int(bd[3] or 0),
+        tools=int(bd[4] or 0),
+        others=others,
     )
 
     # Últimos 12 meses.

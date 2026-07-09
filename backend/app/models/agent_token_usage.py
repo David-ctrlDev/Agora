@@ -26,6 +26,11 @@ class AgentTokenUsage(Base):
     cached_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Tokens de las herramientas/function-calling reportados aparte por Gemini
+    # (tool_use_prompt_token_count); se cobran a tarifa de entrada.
+    tool_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(
