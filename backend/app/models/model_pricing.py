@@ -19,6 +19,8 @@ class ModelPricing(Base):
     model: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     input_per_1m: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     output_per_1m: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # Tarifa del contexto cacheado (USD/1M). NULL => se cobra como entrada normal.
+    cached_per_1m: Mapped[float | None] = mapped_column(Float, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

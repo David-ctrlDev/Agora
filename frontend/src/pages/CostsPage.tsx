@@ -4,28 +4,36 @@ import { type FormEvent, useState } from "react";
 
 import { type CostRow, deletePricing, getCostSummary, getPricing, upsertPricing } from "../api/costs";
 import { useMe } from "../auth/useAuth";
+import { Donut } from "../components/charts";
 import { Button, Card, Input, Kpi, PageHeader, Panel, Spinner } from "../components/ui";
 
 const usd = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 const nfmt = (n: number) => n.toLocaleString("es-CO");
 
-function DayBars({ items }: { items: { day: string; cost_usd: number }[] }) {
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const monthLabel = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  return `${MONTHS[(m ?? 1) - 1]} ${String(y).slice(2)}`;
+};
+
+/** Barras horizontales de dinero (sirve para días y meses). */
+function MoneyBars({ items }: { items: { label: string; value: number }[] }) {
   if (items.length === 0) return <p className="text-sm text-slate-400">Sin consumo todavía.</p>;
-  const max = Math.max(...items.map((i) => i.cost_usd), 0.000001);
+  const max = Math.max(...items.map((i) => i.value), 0.000001);
   return (
     <div className="space-y-2">
       {items.map((it) => (
-        <div key={it.day} className="flex items-center gap-3">
-          <span className="w-16 shrink-0 text-xs tabular-nums text-slate-400">{it.day.slice(5)}</span>
+        <div key={it.label} className="flex items-center gap-3">
+          <span className="w-16 shrink-0 text-xs tabular-nums text-slate-400">{it.label}</span>
           <div className="h-2.5 flex-1 rounded-full bg-slate-100">
             <div
               className="h-2.5 rounded-full bg-brand-500"
-              style={{ width: `${Math.max((it.cost_usd / max) * 100, 2)}%` }}
+              style={{ width: `${Math.max((it.value / max) * 100, 2)}%` }}
             />
           </div>
           <span className="w-20 shrink-0 text-right text-xs tabular-nums text-slate-600">
-            {usd(it.cost_usd)}
+            {usd(it.value)}
           </span>
         </div>
       ))}
@@ -87,6 +95,7 @@ function PricingPanel() {
   const [model, setModel] = useState("");
   const [inp, setInp] = useState("");
   const [outp, setOutp] = useState("");
+  const [cache, setCache] = useState("");
 
   const save = useMutation({
     mutationFn: () =>
@@ -94,23 +103,31 @@ function PricingPanel() {
         model: model.trim(),
         input_per_1m: Number(inp),
         output_per_1m: Number(outp),
+        cached_per_1m: cache === "" ? null : Number(cache),
       }),
     onSuccess: () => {
       invalidate();
       setModel("");
       setInp("");
       setOutp("");
+      setCache("");
     },
   });
   const del = useMutation({ mutationFn: (id: number) => deletePricing(id), onSuccess: invalidate });
 
-  const valid = model.trim() && inp !== "" && outp !== "" && Number(inp) >= 0 && Number(outp) >= 0;
+  const valid =
+    model.trim() &&
+    inp !== "" &&
+    outp !== "" &&
+    Number(inp) >= 0 &&
+    Number(outp) >= 0 &&
+    (cache === "" || Number(cache) >= 0);
   const rows = pricing.data ?? [];
 
   return (
     <Panel
       title="Tarifas por modelo"
-      subtitle="USD por 1M de tokens. Los cambios aplican a consumos futuros."
+      subtitle="USD por 1M de tokens (según la página de precios de Gemini). Los cambios aplican a consumos futuros."
     >
       <form
         onSubmit={(e: FormEvent) => {
@@ -119,7 +136,7 @@ function PricingPanel() {
         }}
         className="mb-4 flex flex-wrap items-end gap-3"
       >
-        <div className="min-w-[220px] flex-1">
+        <div className="min-w-[200px] flex-1">
           <Input
             label="Modelo"
             value={model}
@@ -127,35 +144,44 @@ function PricingPanel() {
             placeholder="p. ej. gemini-flash-latest"
           />
         </div>
-        <div className="w-44">
+        <div className="w-40">
           <Input
-            label="Entrada (USD / 1M)"
+            label="Entrada (USD/1M)"
             type="number"
             step="0.001"
             min="0"
             value={inp}
             onChange={(e) => setInp(e.target.value)}
-            placeholder="0.10"
+            placeholder="1.50"
           />
         </div>
-        <div className="w-44">
+        <div className="w-40">
           <Input
-            label="Salida (USD / 1M)"
+            label="Salida (USD/1M)"
             type="number"
             step="0.001"
             min="0"
             value={outp}
             onChange={(e) => setOutp(e.target.value)}
-            placeholder="0.40"
+            placeholder="9.00"
+          />
+        </div>
+        <div className="w-44">
+          <Input
+            label="Caché (USD/1M, opcional)"
+            type="number"
+            step="0.001"
+            min="0"
+            value={cache}
+            onChange={(e) => setCache(e.target.value)}
+            placeholder="0.15"
           />
         </div>
         <Button type="submit" disabled={!valid || save.isPending}>
           <Plus className="h-4 w-4" /> {save.isPending ? "Guardando…" : "Guardar tarifa"}
         </Button>
       </form>
-      {save.isError && (
-        <p className="mb-3 text-sm text-rose-600">No se pudo guardar la tarifa.</p>
-      )}
+      {save.isError && <p className="mb-3 text-sm text-rose-600">No se pudo guardar la tarifa.</p>}
 
       {pricing.isLoading ? (
         <Spinner label="Cargando tarifas…" />
@@ -165,12 +191,13 @@ function PricingPanel() {
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px] text-sm">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
                 <th className="px-2 py-2">Modelo</th>
                 <th className="px-2 py-2 text-right">Entrada / 1M</th>
                 <th className="px-2 py-2 text-right">Salida / 1M</th>
+                <th className="px-2 py-2 text-right">Caché / 1M</th>
                 <th className="px-2 py-2 text-right">Acción</th>
               </tr>
             </thead>
@@ -180,6 +207,15 @@ function PricingPanel() {
                   <td className="px-2 py-2 font-medium text-slate-800">{p.model}</td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-600">{usd(p.input_per_1m)}</td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-600">{usd(p.output_per_1m)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-slate-600">
+                    {p.cached_per_1m == null ? (
+                      <span className="text-slate-400" title="Sin tarifa de caché: se cobra como entrada">
+                        como entrada
+                      </span>
+                    ) : (
+                      usd(p.cached_per_1m)
+                    )}
+                  </td>
                   <td className="px-2 py-2 text-right">
                     <div className="inline-flex gap-1.5">
                       <button
@@ -188,6 +224,7 @@ function PricingPanel() {
                           setModel(p.model);
                           setInp(String(p.input_per_1m));
                           setOutp(String(p.output_per_1m));
+                          setCache(p.cached_per_1m == null ? "" : String(p.cached_per_1m));
                         }}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                       >
@@ -210,6 +247,11 @@ function PricingPanel() {
           </table>
         </div>
       )}
+      <p className="mt-3 text-xs text-slate-400">
+        Cómo se calcula: entrada sin caché × tarifa de entrada + caché × tarifa de caché + (salida +
+        pensamiento) × tarifa de salida. El almacenamiento por hora de cachés explícitos no aplica
+        (Ágora no crea cachés).
+      </p>
     </Panel>
   );
 }
@@ -217,8 +259,9 @@ function PricingPanel() {
 export default function CostsPage() {
   const me = useMe();
   const q = useQuery({ queryKey: ["costs"], queryFn: getCostSummary });
+  const isSuper = me.data?.is_superadmin ?? false;
 
-  const allowed = me.data?.is_superadmin || me.data?.can_view_costs;
+  const allowed = isSuper || me.data?.can_view_costs;
   if (me.data && !allowed) {
     return (
       <Panel>
@@ -230,22 +273,60 @@ export default function CostsPage() {
   const d = q.data;
   if (!d) return null;
 
+  const tokenSegments = [
+    { label: "Entrada", value: d.breakdown.input, color: "#0ea5e9" },
+    { label: "Caché", value: d.breakdown.cached, color: "#94a3b8" },
+    { label: "Salida", value: d.breakdown.output, color: "#10b981" },
+    { label: "Pensamiento", value: d.breakdown.thoughts, color: "#8b5cf6" },
+  ];
+  const breakdownTotal =
+    d.breakdown.input + d.breakdown.cached + d.breakdown.output + d.breakdown.thoughts;
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Costos"
         title="Costo del agente IA"
-        description="Consumo de tokens del asistente y su costo estimado."
+        description={
+          isSuper
+            ? "Consumo de tokens del asistente, costo estimado y tarifas."
+            : "Consumo de tokens del asistente y su costo estimado (vista informativa)."
+        }
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Costo del mes" value={usd(d.month_cost_usd)} hint="estimado (USD)" icon={<Coins className="h-4 w-4" />} tone="brand" />
+        <Kpi
+          label="Costo del mes"
+          value={usd(d.month_cost_usd)}
+          hint={`proyección: ${usd(d.month_projection_usd)}`}
+          icon={<Coins className="h-4 w-4" />}
+          tone="brand"
+        />
         <Kpi label="Costo total" value={usd(d.total_cost_usd)} hint="histórico" icon={<CalendarClock className="h-4 w-4" />} tone="emerald" />
         <Kpi label="Tokens totales" value={nfmt(d.total_tokens)} hint={`${nfmt(d.total_calls)} llamadas`} icon={<Cpu className="h-4 w-4" />} tone="slate" />
-        <Kpi label="Llamadas al modelo" value={nfmt(d.total_calls)} hint="al agente" icon={<MessageSquare className="h-4 w-4" />} tone="slate" />
+        <Kpi
+          label="Costo por llamada"
+          value={d.total_calls ? usd(d.total_cost_usd / d.total_calls) : "$0.00"}
+          hint="promedio"
+          icon={<MessageSquare className="h-4 w-4" />}
+          tone="slate"
+        />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="Costo por mes" subtitle="Últimos 12 meses">
+          <MoneyBars items={d.by_month.map((m) => ({ label: monthLabel(m.month), value: m.cost_usd }))} />
+        </Panel>
+        <Panel title="Distribución de tokens" subtitle="Qué compone el consumo">
+          {breakdownTotal > 0 ? (
+            <Donut segments={tokenSegments} centerValue={nfmt(breakdownTotal)} centerLabel="tokens" />
+          ) : (
+            <p className="text-sm text-slate-400">Sin consumo todavía.</p>
+          )}
+        </Panel>
       </div>
 
       <Panel title="Costo por día" subtitle="Últimos 30 días">
-        <DayBars items={d.by_day} />
+        <MoneyBars items={d.by_day.map((x) => ({ label: x.day.slice(5), value: x.cost_usd }))} />
       </Panel>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -253,7 +334,7 @@ export default function CostsPage() {
         <RowsTable title="Por modelo" rows={d.by_model} />
       </div>
 
-      {me.data?.is_superadmin && <PricingPanel />}
+      {isSuper && <PricingPanel />}
 
       <p className="text-xs text-slate-400">
         Costo estimado según las tarifas por modelo. El importe real de Google puede variar.

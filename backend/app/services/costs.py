@@ -1,4 +1,5 @@
 """Agregados de consumo/costo del agente y gestión de tarifas por modelo."""
+import calendar
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
@@ -7,7 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent_token_usage import AgentTokenUsage as U
 from app.models.model_pricing import ModelPricing
 from app.models.user import User
-from app.schemas.costs import CostDay, CostRow, CostSummary, ModelPricingUpsert
+from app.schemas.costs import (
+    CostDay,
+    CostMonth,
+    CostRow,
+    CostSummary,
+    ModelPricingUpsert,
+    TokenBreakdown,
+)
 
 
 async def summary(db: AsyncSession) -> CostSummary:
@@ -21,7 +29,8 @@ async def summary(db: AsyncSession) -> CostSummary:
         )
     ).one()
 
-    first_of_month = date.today().replace(day=1)
+    today = date.today()
+    first_of_month = today.replace(day=1)
     month = (
         await db.execute(
             select(
@@ -31,8 +40,44 @@ async def summary(db: AsyncSession) -> CostSummary:
             ).where(func.date(U.created_at) >= first_of_month)
         )
     ).one()
+    # Proyección del mes: costo acumulado / días transcurridos × días del mes.
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    projection = float(month[0] or 0) / today.day * days_in_month
 
-    since = date.today() - timedelta(days=29)
+    # Desglose de tokens (entrada sin caché / caché / salida / pensamiento).
+    bd = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(U.prompt_tokens - U.cached_tokens), 0),
+                func.coalesce(func.sum(U.cached_tokens), 0),
+                func.coalesce(func.sum(U.output_tokens), 0),
+                func.coalesce(func.sum(U.thought_tokens), 0),
+            )
+        )
+    ).one()
+    breakdown = TokenBreakdown(
+        input=int(bd[0] or 0), cached=int(bd[1] or 0), output=int(bd[2] or 0), thoughts=int(bd[3] or 0)
+    )
+
+    # Últimos 12 meses.
+    months_back = today.year * 12 + (today.month - 1) - 11
+    m_year, m_month = divmod(months_back, 12)
+    twelve_months_ago = date(m_year, m_month + 1, 1)
+    month_expr = func.to_char(U.created_at, "YYYY-MM")
+    month_rows = (
+        await db.execute(
+            select(month_expr, func.sum(U.cost_usd), func.sum(U.total_tokens))
+            .where(func.date(U.created_at) >= twelve_months_ago)
+            .group_by(month_expr)
+            .order_by(month_expr)
+        )
+    ).all()
+    by_month = [
+        CostMonth(month=m, cost_usd=round(float(c or 0), 4), tokens=int(t or 0))
+        for m, c, t in month_rows
+    ]
+
+    since = today - timedelta(days=29)
     day_rows = (
         await db.execute(
             select(func.date(U.created_at), func.sum(U.cost_usd), func.sum(U.total_tokens))
@@ -89,7 +134,10 @@ async def summary(db: AsyncSession) -> CostSummary:
         month_cost_usd=round(float(month[0] or 0), 4),
         month_tokens=int(month[1] or 0),
         month_calls=int(month[2] or 0),
+        month_projection_usd=round(projection, 4),
+        breakdown=breakdown,
         by_day=by_day,
+        by_month=by_month,
         by_user=by_user,
         by_model=by_model,
     )
@@ -111,12 +159,16 @@ async def upsert_pricing(db: AsyncSession, payload: ModelPricingUpsert) -> Model
     ).scalar_one_or_none()
     if row is None:
         row = ModelPricing(
-            model=model, input_per_1m=payload.input_per_1m, output_per_1m=payload.output_per_1m
+            model=model,
+            input_per_1m=payload.input_per_1m,
+            output_per_1m=payload.output_per_1m,
+            cached_per_1m=payload.cached_per_1m,
         )
         db.add(row)
     else:
         row.input_per_1m = payload.input_per_1m
         row.output_per_1m = payload.output_per_1m
+        row.cached_per_1m = payload.cached_per_1m
     await db.commit()
     await db.refresh(row)
     return row

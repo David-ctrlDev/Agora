@@ -24,11 +24,23 @@ from app.schemas.agent import MessageRead
 _dev = DevAgentLLM()  # reutilizamos sus plantillas de propuesta (deterministas)
 
 
-async def _record_usage(user_id: int, model: str, prompt: int, output: int, total: int) -> None:
-    """Registra el consumo de tokens de una llamada al modelo, con costo estimado
-    según la tarifa del modelo en BD (module de Costos). Best-effort en su propia
-    sesión: nunca debe romper la conversación."""
-    if not (prompt or output or total):
+async def _record_usage(
+    user_id: int,
+    model: str,
+    prompt: int,
+    output: int,
+    total: int,
+    *,
+    thoughts: int = 0,
+    cached: int = 0,
+) -> None:
+    """Registra el consumo de una llamada al modelo con costo estimado según la
+    tarifa en BD (módulo de Costos), replicando la facturación de Google:
+    - entrada: (prompt - caché) a tarifa de entrada + caché a tarifa de caché
+      (si no hay tarifa de caché definida, el caché se cobra como entrada);
+    - salida: candidatos + tokens de pensamiento, a tarifa de salida.
+    Best-effort en su propia sesión: nunca debe romper la conversación."""
+    if not (prompt or output or thoughts or total):
         return
     try:
         async with SessionLocal() as db:
@@ -37,9 +49,16 @@ async def _record_usage(user_id: int, model: str, prompt: int, output: int, tota
             ).scalar_one_or_none()
             cost = 0.0
             if pricing is not None:
+                cached = min(max(cached, 0), prompt)  # el caché es parte del prompt
+                cached_rate = (
+                    pricing.cached_per_1m
+                    if pricing.cached_per_1m is not None
+                    else pricing.input_per_1m
+                )
                 cost = (
-                    prompt / 1_000_000 * pricing.input_per_1m
-                    + output / 1_000_000 * pricing.output_per_1m
+                    (prompt - cached) / 1_000_000 * pricing.input_per_1m
+                    + cached / 1_000_000 * cached_rate
+                    + (output + thoughts) / 1_000_000 * pricing.output_per_1m
                 )
             db.add(
                 AgentTokenUsage(
@@ -47,7 +66,9 @@ async def _record_usage(user_id: int, model: str, prompt: int, output: int, tota
                     model=model,
                     prompt_tokens=prompt,
                     output_tokens=output,
-                    total_tokens=total or (prompt + output),
+                    thought_tokens=thoughts,
+                    cached_tokens=cached,
+                    total_tokens=total or (prompt + output + thoughts),
                     cost_usd=round(cost, 6),
                 )
             )
@@ -547,6 +568,8 @@ async def run_turn(
                 int(getattr(um, "prompt_token_count", 0) or 0),
                 int(getattr(um, "candidates_token_count", 0) or 0),
                 int(getattr(um, "total_token_count", 0) or 0),
+                thoughts=int(getattr(um, "thoughts_token_count", 0) or 0),
+                cached=int(getattr(um, "cached_content_token_count", 0) or 0),
             )
         return resp
 

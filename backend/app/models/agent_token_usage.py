@@ -18,6 +18,14 @@ class AgentTokenUsage(Base):
     model: Mapped[str] = mapped_column(String(80), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Tokens de razonamiento (se cobran a tarifa de salida) y de contexto cacheado
+    # (parte de prompt_tokens; se cobran a la tarifa de caché si está definida).
+    thought_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    cached_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(
