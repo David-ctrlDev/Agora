@@ -196,6 +196,7 @@ function UsersTab() {
                 <th className="px-4 py-2.5">Rol</th>
                 <th className="px-4 py-2.5">Áreas</th>
                 <th className="px-4 py-2.5">2FA</th>
+                <th className="px-4 py-2.5">Costos</th>
                 <th className="px-4 py-2.5">Estado</th>
                 <th className="px-4 py-2.5 text-right">Acción</th>
               </tr>
@@ -228,6 +229,11 @@ function UsersTab() {
                   <td className="px-4 py-2.5">
                     <Badge tone={u.twofa_enabled ? "success" : "neutral"} dot>
                       {u.twofa_enabled ? "Activo" : "—"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <Badge tone={u.can_view_costs ? "brand" : "neutral"}>
+                      {u.can_view_costs ? "Solo vista" : "—"}
                     </Badge>
                   </td>
                   <td className="px-4 py-2.5">
