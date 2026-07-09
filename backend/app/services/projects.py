@@ -36,6 +36,7 @@ def _to_read(project: Project, area_name: str | None, owner_name: str | None) ->
         process=project.process,
         benefits=project.benefits,
         change_management=project.change_management,
+        is_development=project.is_development,
     )
 
 
@@ -132,6 +133,7 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
         category=payload.category or None,
         process=payload.process or None,
         project_type=payload.project_type or None,
+        is_development=payload.is_development,
     )
     db.add(project)
     await db.flush()
@@ -150,6 +152,14 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
         await drive_docs.ensure_project_folder(db, project)
     except Exception:
         pass
+    # Proyecto de desarrollo: inicializa su repo Git interno (pestaña Código).
+    if project.is_development:
+        try:
+            from app.services import coderepo
+
+            await coderepo.ensure_repo(project.id)
+        except Exception:
+            pass
     return await to_read(db, project)
 
 
@@ -172,8 +182,16 @@ async def update_project(db: AsyncSession, project: Project, payload: ProjectUpd
 
 
 async def delete_project(db: AsyncSession, project: Project) -> None:
+    project_id = project.id
     await db.delete(project)
     await db.commit()
+    # Limpia el repo Git interno del proyecto (si existía). Best-effort.
+    try:
+        from app.services import coderepo
+
+        coderepo.remove_repo(project_id)
+    except Exception:
+        pass
 
 
 async def list_members(db: AsyncSession, project_id: int) -> list[ProjectMemberRead]:

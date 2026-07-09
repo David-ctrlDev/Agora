@@ -33,6 +33,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/.venv          # preserva el venv de la imagen (no lo pisa el bind-mount)
+      - repos_data:/data/repos  # repos Git de proyectos de desarrollo (pestaña Código)
     depends_on:
       db:
         condition: service_healthy
@@ -72,3 +73,4 @@ services:
 volumes:
   postgres_data:
   n8n_data:
+  repos_data:

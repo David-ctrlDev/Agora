@@ -18,6 +18,7 @@ class ProjectCreate(BaseModel):
     category: str | None = None
     process: str | None = None
     project_type: str | None = None
+    is_development: bool = False
 
 
 class RoadmapFields(BaseModel):
@@ -35,6 +36,7 @@ class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
     status: ProjectStatus | None = None
+    is_development: bool | None = None  # solo admin del área o super admin
     start_date: date | None = None
     due_date: date | None = None
     owner_id: int | None = None
@@ -66,6 +68,7 @@ class ProjectRead(RoadmapFields):
     area_name: str | None = None
     owner_name: str | None = None
     is_mine: bool = False  # el usuario actual es dueño o miembro del proyecto
+    is_development: bool = False  # habilita la pestaña Código
 
 
 class ProjectMemberRead(BaseModel):

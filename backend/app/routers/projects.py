@@ -65,6 +65,17 @@ async def update_project(
     project = await _accessible_project(project_id, user, db)
     if not await svc.can_edit(db, user, project):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permiso de edición")
+    # Activar/desactivar "proyecto de desarrollo" queda reservado al admin del
+    # área o al super admin (habilita el repo Git de la pestaña Código).
+    if payload.is_development is not None and payload.is_development != project.is_development:
+        from app.core.deps import admin_area_ids
+
+        admin_ids = await admin_area_ids(db, user)
+        if admin_ids is not None and project.area_id not in admin_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo un administrador del área o el super admin puede cambiar esto",
+            )
     old_status = project.status
     read = await svc.update_project(db, project, payload)
     if read.status != old_status:

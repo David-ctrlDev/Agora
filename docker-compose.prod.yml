@@ -31,7 +31,11 @@ services:
     restart: always
     # El entrypoint aplica migraciones; en prod NO siembra (ENV=production).
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    volumes: !reset []               # sin bind-mount del código: usa el de la imagen
+    # Sin bind-mount del código (usa el de la imagen). Solo se monta la carpeta de
+    # repos Git de proyectos de desarrollo, en una RUTA DEL HOST (hermana de DATA_PATH;
+    # no puede ir dentro porque esa carpeta es el directorio interno de Postgres).
+    volumes: !override
+      - ${REPOS_PATH:-/srv/agora/repos}:/data/repos
     environment:
       ENV: production
       SEED_ON_START: "false"

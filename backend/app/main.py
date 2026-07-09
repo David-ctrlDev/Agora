@@ -11,6 +11,7 @@ from app.routers import (
     audit,
     auth,
     catalog,
+    code,
     comments,
     costs,
     economics,
@@ -45,6 +46,7 @@ app.include_router(users.router)
 app.include_router(admin.router)
 app.include_router(area_admin.router)
 app.include_router(catalog.router)
+app.include_router(code.router)
 app.include_router(costs.router)
 
 

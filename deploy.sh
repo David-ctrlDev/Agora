@@ -28,6 +28,7 @@ HEALTHCHECK_TIMEOUT=120               # s de espera de /api/health antes de roll
 KEEP_RELEASES=2                       # copias tar.gz en releases/ (además de la actual)
 KEEP_PREDEPLOY_DUMPS=5                # snapshots pg_dump conservados
 BACKUPS_PATH_REMOTE="/srv/agora/backups/predeploy"
+REPOS_PATH_REMOTE="/srv/agora/repos"  # repos Git (pestaña Código); = REPOS_PATH del .env de prod
 # deploy.sh vive en la raíz del repo → REPO_DIR es su propia carpeta.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${SCRIPT_DIR}"
@@ -184,6 +185,12 @@ if docker inspect "$DB_CONTAINER" >/dev/null 2>&1; then
 else
   echo "[deploy] primer deploy: no hay BD previa, se omite el respaldo."
 fi
+# Repos Git de la pestaña Código: también entran al respaldo pre-deploy.
+if [ -d "$REPOS_PATH_REMOTE" ] && [ -n "\$(ls -A "$REPOS_PATH_REMOTE" 2>/dev/null)" ]; then
+  tar czf "${BACKUPS_PATH_REMOTE}/repos_${DUMP_TS}.tar.gz" -C "$REPOS_PATH_REMOTE" .
+  ls -1t "${BACKUPS_PATH_REMOTE}"/repos_*.tar.gz | tail -n +$((KEEP_PREDEPLOY_DUMPS + 1)) | xargs -r rm
+  echo "[deploy] respaldo repos: ${BACKUPS_PATH_REMOTE}/repos_${DUMP_TS}.tar.gz"
+fi
 EOF
 ok "Respaldo pre-deploy listo (se omite en el primer deploy)."
 
@@ -202,6 +209,8 @@ cd "$DEPLOY_PATH"
 [[ -f agora-images.tar.gz ]] && mv agora-images.tar.gz "releases/agora-images-prev-\$(date +%Y%m%d_%H%M).tar.gz"
 mv "${TAR_NAME}" agora-images.tar.gz
 docker load < agora-images.tar.gz
+# Carpeta de repos Git (pestaña Código): el backend corre como appuser (uid 1000).
+mkdir -p "$REPOS_PATH_REMOTE" && chown 1000:1000 "$REPOS_PATH_REMOTE"
 docker compose ${COMPOSE_FILES[*]} up -d
 ls -1t releases/*.tar.gz 2>/dev/null | tail -n +$((KEEP_RELEASES + 1)) | xargs -r rm
 docker image prune -f >/dev/null 2>&1 || true

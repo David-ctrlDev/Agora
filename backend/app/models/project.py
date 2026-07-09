@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -57,6 +57,10 @@ class Project(Base):
     strategic_value: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Carpeta de Drive que actúa como repositorio/documentación del proyecto.
     docs_folder_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Proyecto de desarrollo: habilita la pestaña Código (repo Git interno).
+    is_development: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

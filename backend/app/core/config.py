@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     # La tarifa de tokens NO va aquí: se gestiona en la BD (tabla model_pricing)
     # desde el módulo de Costos, solo por el super admin.
 
+    # Repos Git de los proyectos de desarrollo (pestaña Código). Ruta DENTRO del
+    # contenedor; el volumen la respalda (dev: repos_data, prod: REPOS_PATH del host).
+    repos_path: str = "/data/repos"
+    # Límites de subida de la pestaña Código.
+    code_max_file_mb: int = 25
+    code_max_batch_mb: int = 100
+
     # Cifrado en reposo de tokens OAuth (Fernet). Vacío => se usa una clave derivada de SECRET_KEY (solo dev).
     token_encryption_key: str = ""
 
