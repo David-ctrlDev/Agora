@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CostRow(BaseModel):
@@ -21,8 +21,21 @@ class CostSummary(BaseModel):
     month_cost_usd: float
     month_tokens: int
     month_calls: int
-    input_rate_per_1m: float
-    output_rate_per_1m: float
     by_day: list[CostDay]
     by_user: list[CostRow]
     by_model: list[CostRow]
+
+
+class ModelPricingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    model: str
+    input_per_1m: float
+    output_per_1m: float
+
+
+class ModelPricingUpsert(BaseModel):
+    model: str = Field(min_length=1, max_length=80)
+    input_per_1m: float = Field(ge=0)
+    output_per_1m: float = Field(ge=0)

@@ -1,13 +1,13 @@
-"""Agregados de consumo/costo del agente para el módulo de Costos."""
+"""Agregados de consumo/costo del agente y gestión de tarifas por modelo."""
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.agent_token_usage import AgentTokenUsage as U
+from app.models.model_pricing import ModelPricing
 from app.models.user import User
-from app.schemas.costs import CostDay, CostRow, CostSummary
+from app.schemas.costs import CostDay, CostRow, CostSummary, ModelPricingUpsert
 
 
 async def summary(db: AsyncSession) -> CostSummary:
@@ -89,9 +89,43 @@ async def summary(db: AsyncSession) -> CostSummary:
         month_cost_usd=round(float(month[0] or 0), 4),
         month_tokens=int(month[1] or 0),
         month_calls=int(month[2] or 0),
-        input_rate_per_1m=settings.gemini_price_input_per_1m,
-        output_rate_per_1m=settings.gemini_price_output_per_1m,
         by_day=by_day,
         by_user=by_user,
         by_model=by_model,
     )
+
+
+# --- Tarifas por modelo (las gestiona el super admin) ---
+
+
+async def list_pricing(db: AsyncSession) -> list[ModelPricing]:
+    return list(
+        (await db.execute(select(ModelPricing).order_by(ModelPricing.model))).scalars().all()
+    )
+
+
+async def upsert_pricing(db: AsyncSession, payload: ModelPricingUpsert) -> ModelPricing:
+    model = payload.model.strip()
+    row = (
+        await db.execute(select(ModelPricing).where(ModelPricing.model == model))
+    ).scalar_one_or_none()
+    if row is None:
+        row = ModelPricing(
+            model=model, input_per_1m=payload.input_per_1m, output_per_1m=payload.output_per_1m
+        )
+        db.add(row)
+    else:
+        row.input_per_1m = payload.input_per_1m
+        row.output_per_1m = payload.output_per_1m
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def delete_pricing(db: AsyncSession, pricing_id: int) -> bool:
+    row = await db.get(ModelPricing, pricing_id)
+    if row is None:
+        return False
+    await db.delete(row)
+    await db.commit()
+    return True

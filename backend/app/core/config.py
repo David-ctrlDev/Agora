@@ -25,9 +25,10 @@ class Settings(BaseSettings):
     # en el primer login). Si es False, solo entran usuarios ya creados (lista blanca).
     google_auto_provision: bool = True
     bootstrap_admin_emails: str = ""
-    # Super administradores globales (ven y gestionan todo). Fijados por configuración,
-    # no por un rol en BD, para que nadie se vuelva super admin por error. Coma-separado.
-    superadmin_emails: str = "wserna@invesa.com"
+    # Super administradores globales (ven y gestionan todo). SIEMPRE desde el .env
+    # (SUPERADMIN_EMAILS, coma-separado); sin default en código. Si falta, nadie es
+    # super admin hasta configurarla.
+    superadmin_emails: str = ""
 
     # Integraciones externas — proveedor "mock" (sin red) o "real" (con credenciales).
     github_provider: str = "mock"
@@ -62,10 +63,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-flash-latest"
     gemini_embedding_model: str = "gemini-embedding-001"
-    # Tarifa para estimar el costo del agente (USD por 1M de tokens). Entrada y salida
-    # por separado (más certero). Ajusta según el modelo/precios vigentes de Google.
-    gemini_price_input_per_1m: float = 0.10
-    gemini_price_output_per_1m: float = 0.40
+    # La tarifa de tokens NO va aquí: se gestiona en la BD (tabla model_pricing)
+    # desde el módulo de Costos, solo por el super admin.
 
     # Cifrado en reposo de tokens OAuth (Fernet). Vacío => se usa una clave derivada de SECRET_KEY (solo dev).
     token_encryption_key: str = ""

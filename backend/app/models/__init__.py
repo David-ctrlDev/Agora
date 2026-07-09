@@ -14,6 +14,7 @@ from app.models.document_version import DocumentVersion
 from app.models.github_event import GitHubEvent
 from app.models.github_repo import GitHubRepo
 from app.models.google_document import GoogleDocument
+from app.models.model_pricing import ModelPricing
 from app.models.notification import Notification
 from app.models.oauth_token import OAuthToken
 from app.models.project import Project
@@ -40,6 +41,7 @@ __all__ = [
     "GitHubEvent",
     "GitHubRepo",
     "GoogleDocument",
+    "ModelPricing",
     "Notification",
     "OAuthToken",
     "Project",

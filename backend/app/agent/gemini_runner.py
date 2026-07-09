@@ -8,6 +8,7 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
 from google.genai import types
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import actions, tools
@@ -16,6 +17,7 @@ from app.agent.llm import DevAgentLLM
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.agent_token_usage import AgentTokenUsage
+from app.models.model_pricing import ModelPricing
 from app.models.user import User
 from app.schemas.agent import MessageRead
 
@@ -23,16 +25,22 @@ _dev = DevAgentLLM()  # reutilizamos sus plantillas de propuesta (deterministas)
 
 
 async def _record_usage(user_id: int, model: str, prompt: int, output: int, total: int) -> None:
-    """Registra el consumo de tokens de una llamada al modelo, con costo estimado.
-    Best-effort en su propia sesión: nunca debe romper la conversación."""
+    """Registra el consumo de tokens de una llamada al modelo, con costo estimado
+    según la tarifa del modelo en BD (module de Costos). Best-effort en su propia
+    sesión: nunca debe romper la conversación."""
     if not (prompt or output or total):
         return
-    cost = (
-        prompt / 1_000_000 * settings.gemini_price_input_per_1m
-        + output / 1_000_000 * settings.gemini_price_output_per_1m
-    )
     try:
         async with SessionLocal() as db:
+            pricing = (
+                await db.execute(select(ModelPricing).where(ModelPricing.model == model))
+            ).scalar_one_or_none()
+            cost = 0.0
+            if pricing is not None:
+                cost = (
+                    prompt / 1_000_000 * pricing.input_per_1m
+                    + output / 1_000_000 * pricing.output_per_1m
+                )
             db.add(
                 AgentTokenUsage(
                     user_id=user_id,

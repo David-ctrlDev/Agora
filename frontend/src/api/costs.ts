@@ -20,11 +20,23 @@ export interface CostSummary {
   month_cost_usd: number;
   month_tokens: number;
   month_calls: number;
-  input_rate_per_1m: number;
-  output_rate_per_1m: number;
   by_day: CostDay[];
   by_user: CostRow[];
   by_model: CostRow[];
 }
 
+export interface ModelPricing {
+  id: number;
+  model: string;
+  input_per_1m: number;
+  output_per_1m: number;
+}
+
 export const getCostSummary = () => api.get<CostSummary>("/api/costs/summary");
+export const getPricing = () => api.get<ModelPricing[]>("/api/costs/pricing");
+export const upsertPricing = (payload: {
+  model: string;
+  input_per_1m: number;
+  output_per_1m: number;
+}) => api.put<ModelPricing>("/api/costs/pricing", payload);
+export const deletePricing = (id: number) => api.del<void>(`/api/costs/pricing/${id}`);
