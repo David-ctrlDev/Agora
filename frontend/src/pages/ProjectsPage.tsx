@@ -53,6 +53,7 @@ export default function ProjectsPage() {
   const [category, setCategory] = useState("");
   const [processName, setProcessName] = useState("");
   const [projectType, setProjectType] = useState("");
+  const [isDevelopment, setIsDevelopment] = useState(false);
 
   const [scope, setScope] = useState<"mine" | "area">("mine");
   const [search, setSearch] = useState("");
@@ -83,6 +84,7 @@ export default function ProjectsPage() {
       setCategory("");
       setProcessName("");
       setProjectType("");
+      setIsDevelopment(false);
     },
   });
 
@@ -99,6 +101,7 @@ export default function ProjectsPage() {
       category: category || null,
       process: processName || null,
       project_type: projectType || null,
+      is_development: isDevelopment,
     });
   };
 
@@ -252,6 +255,23 @@ export default function ProjectsPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Breve descripción"
             />
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 p-3 transition hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={isDevelopment}
+                onChange={(e) => setIsDevelopment(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-800">
+                  Es un proyecto de desarrollo
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Activa la pestaña Código: versiones de archivos, historial, restaurar y borradores
+                  (Git sin comandos).
+                </span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
                 Cancelar

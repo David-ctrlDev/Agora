@@ -38,6 +38,7 @@ export interface Project extends RoadmapFields {
   area_name: string | null;
   owner_name: string | null;
   is_mine: boolean;
+  is_development: boolean;
 }
 
 export interface ProjectCreate {
@@ -51,6 +52,7 @@ export interface ProjectCreate {
   category?: string | null;
   process?: string | null;
   project_type?: string | null;
+  is_development?: boolean;
 }
 
 export interface ProjectUpdate extends Partial<RoadmapFields> {
@@ -61,6 +63,7 @@ export interface ProjectUpdate extends Partial<RoadmapFields> {
   due_date?: string | null;
   owner_id?: number | null;
   progress?: number;
+  is_development?: boolean;
 }
 
 export interface ProjectMember {
