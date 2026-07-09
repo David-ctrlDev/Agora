@@ -30,7 +30,8 @@ class Settings(BaseSettings):
     # super admin hasta configurarla.
     superadmin_emails: str = ""
 
-    # Integraciones externas — proveedor "mock" (sin red) o "real" (con credenciales).
+    # Integraciones externas — proveedor "mock" (sin red), "real" (con credenciales)
+    # o "none" (GitHub apagado: sin repos automáticos ni actividad; para prod sin GitHub).
     github_provider: str = "mock"
     github_webhook_secret: str = ""
     # Al crear un proyecto se crea/vincula un repositorio de forma transparente (sin UI).

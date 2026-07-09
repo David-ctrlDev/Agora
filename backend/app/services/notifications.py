@@ -145,15 +145,23 @@ async def run_detection(db: AsyncSession) -> int:
 
         stale = False
         if project.status == "active" and project.due_date and 0 <= (project.due_date - today).days <= 7:
-            last_event = (
+            # Solo aplica a proyectos que realmente usan GitHub (tienen repo vinculado);
+            # si no, "sin actividad de GitHub" sería una falsa alarma.
+            has_repo = (
                 await db.execute(
-                    select(func.max(GitHubEvent.occurred_at))
-                    .join(GitHubRepo, GitHubRepo.id == GitHubEvent.repo_id)
-                    .where(GitHubRepo.project_id == project.id)
+                    select(GitHubRepo.id).where(GitHubRepo.project_id == project.id).limit(1)
                 )
-            ).scalar()
-            if last_event is None or last_event < now - timedelta(days=14):
-                stale = True
+            ).scalar_one_or_none() is not None
+            if has_repo:
+                last_event = (
+                    await db.execute(
+                        select(func.max(GitHubEvent.occurred_at))
+                        .join(GitHubRepo, GitHubRepo.id == GitHubEvent.repo_id)
+                        .where(GitHubRepo.project_id == project.id)
+                    )
+                ).scalar()
+                if last_event is None or last_event < now - timedelta(days=14):
+                    stale = True
 
         for user_id in recipients:
             if overdue and await _emit(

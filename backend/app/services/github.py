@@ -103,7 +103,7 @@ async def ensure_repo_for_project(db: AsyncSession, project: Project) -> None:
     El usuario no ve Git/GitHub; solo el historial de versiones de documentos. Un
     fallo aquí nunca debe romper la creación del proyecto.
     """
-    if not settings.github_autocreate_repo:
+    if not settings.github_autocreate_repo or settings.github_provider == "none":
         return
     try:
         if await list_repos(db, project.id):
