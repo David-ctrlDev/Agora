@@ -61,6 +61,7 @@ async def _current_user_payload(db: AsyncSession, user: User) -> CurrentUser:
         name=user.name,
         role=user.role,
         is_superadmin=is_superadmin(user),
+        can_view_costs=user.can_view_costs,
         avatar_url=user.avatar_url,
         areas=[AreaMembership(id=a.id, name=a.name, slug=a.slug, area_role=r) for a, r in areas],
         twofa_enabled=user.totp_enabled,

@@ -12,6 +12,7 @@ from app.routers import (
     auth,
     catalog,
     comments,
+    costs,
     economics,
     github,
     google,
@@ -44,6 +45,7 @@ app.include_router(users.router)
 app.include_router(admin.router)
 app.include_router(area_admin.router)
 app.include_router(catalog.router)
+app.include_router(costs.router)
 
 
 @app.get("/api/health", tags=["health"])

@@ -71,3 +71,12 @@ async def require_area_admin(
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN, detail="Requiere administrador de área"
     )
+
+
+async def require_costs_access(user: User = Depends(get_current_user)) -> User:
+    """Módulo de costos: super admin o usuarios habilitados por él."""
+    if is_superadmin(user) or user.can_view_costs:
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso al módulo de costos"
+    )

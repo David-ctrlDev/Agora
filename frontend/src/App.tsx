@@ -7,6 +7,7 @@ import AgentPage from "./pages/AgentPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import AreaAdminPage from "./pages/AreaAdminPage";
 import AreasPage from "./pages/AreasPage";
+import CostsPage from "./pages/CostsPage";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import NotificationsPage from "./pages/NotificationsPage";
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/seguridad" element={<SecurityPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/area-admin" element={<AreaAdminPage />} />
+          <Route path="/costos" element={<CostsPage />} />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Route>
       </Route>

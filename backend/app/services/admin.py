@@ -175,6 +175,7 @@ def _to_read(user: User, areas: list[AdminAreaMembership]) -> AdminUserRead:
         role=user.role,
         is_active=user.is_active,
         twofa_enabled=user.totp_enabled,
+        can_view_costs=user.can_view_costs,
         areas=areas,
     )
 
@@ -228,6 +229,8 @@ async def update_user(db: AsyncSession, user: User, payload: AdminUserUpdate) ->
         user.role = payload.role
     if payload.is_active is not None:
         user.is_active = payload.is_active
+    if payload.can_view_costs is not None:
+        user.can_view_costs = payload.can_view_costs
     await db.commit()
     await db.refresh(user)
     return await _read_one(db, user)

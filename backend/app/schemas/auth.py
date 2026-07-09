@@ -14,6 +14,7 @@ class CurrentUser(BaseModel):
     name: str
     role: str
     is_superadmin: bool = False
+    can_view_costs: bool = False
     avatar_url: str | None
     areas: list[AreaMembership]
     twofa_enabled: bool = False

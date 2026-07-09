@@ -13,6 +13,7 @@ export interface AdminUser {
   role: string;
   is_active: boolean;
   twofa_enabled: boolean;
+  can_view_costs: boolean;
   areas: AdminAreaMembership[];
 }
 
@@ -87,7 +88,7 @@ export const createAdminUser = (payload: {
 }) => api.post<AdminUser>("/api/admin/users", payload);
 export const updateAdminUser = (
   id: number,
-  payload: { name?: string; email?: string; role?: string; is_active?: boolean },
+  payload: { name?: string; email?: string; role?: string; is_active?: boolean; can_view_costs?: boolean },
 ) => api.patch<AdminUser>(`/api/admin/users/${id}`, payload);
 export const setUserAreas = (
   id: number,

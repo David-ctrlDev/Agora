@@ -80,6 +80,7 @@ function UsersTab() {
   const [eEmail, setEEmail] = useState("");
   const [eRole, setERole] = useState("member");
   const [eActive, setEActive] = useState(true);
+  const [eCanViewCosts, setECanViewCosts] = useState(false);
   const [eAreaRoles, setEAreaRoles] = useState<Record<number, string>>({});
 
   const openEdit = (u: AdminUser) => {
@@ -88,6 +89,7 @@ function UsersTab() {
     setEEmail(u.email);
     setERole(u.role);
     setEActive(u.is_active);
+    setECanViewCosts(u.can_view_costs);
     setEAreaRoles(Object.fromEntries(u.areas.map((a) => [a.area_id, a.area_role])));
   };
 
@@ -109,6 +111,7 @@ function UsersTab() {
         email: eEmail.trim(),
         role: eRole,
         is_active: eActive,
+        can_view_costs: eCanViewCosts,
       });
       return setUserAreas(
         editUser!.id,
@@ -271,6 +274,16 @@ function UsersTab() {
                 {eActive ? "Activo" : "Inactivo"}
               </button>
             </div>
+          </div>
+          <div>
+            <div className="mb-1.5 text-sm font-medium text-slate-700">Módulo de Costos</div>
+            <button
+              type="button"
+              onClick={() => setECanViewCosts((v) => !v)}
+              className={`h-10 rounded-xl border px-4 text-sm font-medium transition ${eCanViewCosts ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
+            >
+              {eCanViewCosts ? "Con acceso" : "Sin acceso"}
+            </button>
           </div>
           <div>
             <div className="mb-1.5 text-sm font-medium text-slate-700">Áreas y rol</div>

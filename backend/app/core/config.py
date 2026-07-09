@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-flash-latest"
     gemini_embedding_model: str = "gemini-embedding-001"
+    # Tarifa para estimar el costo del agente (USD por 1M de tokens). Entrada y salida
+    # por separado (más certero). Ajusta según el modelo/precios vigentes de Google.
+    gemini_price_input_per_1m: float = 0.10
+    gemini_price_output_per_1m: float = 0.40
 
     # Cifrado en reposo de tokens OAuth (Fernet). Vacío => se usa una clave derivada de SECRET_KEY (solo dev).
     token_encryption_key: str = ""

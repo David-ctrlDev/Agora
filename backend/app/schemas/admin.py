@@ -16,6 +16,7 @@ class AdminUserRead(BaseModel):
     role: str
     is_active: bool
     twofa_enabled: bool
+    can_view_costs: bool = False
     areas: list[AdminAreaMembership]
 
 
@@ -31,6 +32,7 @@ class AdminUserUpdate(BaseModel):
     email: str | None = Field(default=None, min_length=3, max_length=255)
     role: str | None = None  # admin | member
     is_active: bool | None = None
+    can_view_costs: bool | None = None
 
 
 class AreaAssignment(BaseModel):

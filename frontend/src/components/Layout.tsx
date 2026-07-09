@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Coins,
   FolderKanban,
   LayoutDashboard,
   ListChecks,
@@ -159,6 +160,22 @@ export default function Layout() {
             >
               <Settings className="h-[18px] w-[18px]" strokeWidth={2} />
               {me.data?.is_superadmin ? "Administración" : "Administración de área"}
+            </NavLink>
+          )}
+
+          {(me.data?.is_superadmin || me.data?.can_view_costs) && (
+            <NavLink
+              to="/costos"
+              className={({ isActive }) =>
+                `group mt-1 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                  isActive
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                }`
+              }
+            >
+              <Coins className="h-[18px] w-[18px]" strokeWidth={2} />
+              Costos
             </NavLink>
           )}
         </nav>

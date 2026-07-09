@@ -14,10 +14,38 @@ from app.agent import actions, tools
 from app.agent.gemini_client import get_gemini_client
 from app.agent.llm import DevAgentLLM
 from app.core.config import settings
+from app.core.db import SessionLocal
+from app.models.agent_token_usage import AgentTokenUsage
 from app.models.user import User
 from app.schemas.agent import MessageRead
 
 _dev = DevAgentLLM()  # reutilizamos sus plantillas de propuesta (deterministas)
+
+
+async def _record_usage(user_id: int, model: str, prompt: int, output: int, total: int) -> None:
+    """Registra el consumo de tokens de una llamada al modelo, con costo estimado.
+    Best-effort en su propia sesión: nunca debe romper la conversación."""
+    if not (prompt or output or total):
+        return
+    cost = (
+        prompt / 1_000_000 * settings.gemini_price_input_per_1m
+        + output / 1_000_000 * settings.gemini_price_output_per_1m
+    )
+    try:
+        async with SessionLocal() as db:
+            db.add(
+                AgentTokenUsage(
+                    user_id=user_id,
+                    model=model,
+                    prompt_tokens=prompt,
+                    output_tokens=output,
+                    total_tokens=total or (prompt + output),
+                    cost_usd=round(cost, 6),
+                )
+            )
+            await db.commit()
+    except Exception:  # noqa: BLE001 — métrica, no crítica
+        pass
 
 def _system(user: User) -> str:
     return (
@@ -495,13 +523,27 @@ async def run_turn(
     system = _system(user)
     config = types.GenerateContentConfig(system_instruction=system, tools=_TOOLS, temperature=0)
 
-    for _ in range(8):
-        response = await asyncio.to_thread(
+    async def gen(cfg: types.GenerateContentConfig):
+        """Llama a Gemini y registra el consumo de tokens de esa llamada."""
+        resp = await asyncio.to_thread(
             client.models.generate_content,
             model=settings.gemini_chat_model,
             contents=contents,
-            config=config,
+            config=cfg,
         )
+        um = getattr(resp, "usage_metadata", None)
+        if um is not None:
+            await _record_usage(
+                user.id,
+                settings.gemini_chat_model,
+                int(getattr(um, "prompt_token_count", 0) or 0),
+                int(getattr(um, "candidates_token_count", 0) or 0),
+                int(getattr(um, "total_token_count", 0) or 0),
+            )
+        return resp
+
+    for _ in range(8):
+        response = await gen(config)
         candidate = response.candidates[0]
         parts = candidate.content.parts or []
         calls = [p.function_call for p in parts if getattr(p, "function_call", None)]
@@ -592,12 +634,7 @@ async def run_turn(
         "el proyecto, o la acción no existe), dilo con claridad y propón el siguiente paso o pide "
         "lo que falta. Nunca respondas en vacío ni con evasivas."
     )
-    final = await asyncio.to_thread(
-        client.models.generate_content,
-        model=settings.gemini_chat_model,
-        contents=contents,
-        config=types.GenerateContentConfig(system_instruction=final_system, temperature=0),
-    )
+    final = await gen(types.GenerateContentConfig(system_instruction=final_system, temperature=0))
     text = (final.text or "").strip()
     return (
         text
