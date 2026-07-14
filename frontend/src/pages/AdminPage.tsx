@@ -9,6 +9,7 @@ import {
   LogIn,
   Pencil,
   Plus,
+  ScrollText,
   ShieldCheck,
   Sparkles,
   Tags,
@@ -24,6 +25,7 @@ import {
   createAdminArea,
   createAdminUser,
   getAdminActivity,
+  getAdminAudit,
   getAdminStats,
   listAdminAreas,
   listAdminUsers,
@@ -733,9 +735,128 @@ function TareasTab() {
   return <TaskSummaryView data={q.data} />;
 }
 
+const AUDIT_TYPE_LABEL: Record<string, string> = {
+  project: "Proyecto",
+  task: "Tarea",
+  member: "Miembros",
+  code: "Código",
+  document: "Documento",
+  sprint: "Sprint",
+  google: "Google",
+};
+
+function AuditoriaTab() {
+  const q = useQuery({ queryKey: ["admin-audit"], queryFn: () => getAdminAudit(300) });
+  const [fText, setFText] = useState("");
+  const [fType, setFType] = useState("");
+  const [fActor, setFActor] = useState("");
+
+  if (q.isLoading) return <Spinner label="Cargando bitácora…" />;
+  const rows = q.data ?? [];
+  const types = [...new Set(rows.map((r) => r.entity_type))].sort();
+  const actors = [...new Set(rows.map((r) => r.actor_name).filter((n): n is string => !!n))].sort();
+  const text = fText.trim().toLowerCase();
+  const filtered = rows.filter(
+    (r) =>
+      (!fType || r.entity_type === fType) &&
+      (!fActor || r.actor_name === fActor) &&
+      (!text ||
+        r.summary.toLowerCase().includes(text) ||
+        (r.project_name ?? "").toLowerCase().includes(text) ||
+        (r.actor_name ?? "").toLowerCase().includes(text)),
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card className="flex flex-wrap items-end gap-3 p-4">
+        <div className="min-w-[220px] flex-1">
+          <Input
+            label="Buscar"
+            value={fText}
+            onChange={(e) => setFText(e.target.value)}
+            placeholder="persona, proyecto o acción…"
+          />
+        </div>
+        <div className="w-44">
+          <Select label="Tipo" value={fType} onChange={(e) => setFType(e.target.value)}>
+            <option value="">Todos</option>
+            {types.map((t) => (
+              <option key={t} value={t}>{AUDIT_TYPE_LABEL[t] ?? t}</option>
+            ))}
+          </Select>
+        </div>
+        <div className="w-52">
+          <Select label="Persona" value={fActor} onChange={(e) => setFActor(e.target.value)}>
+            <option value="">Todas</option>
+            {actors.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </Select>
+        </div>
+        <span className="mb-1.5 ml-auto text-xs text-slate-400">
+          {filtered.length} de {rows.length} eventos
+        </span>
+      </Card>
+
+      <Card className="overflow-hidden p-0">
+        <div className="max-h-[65vh] overflow-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2.5">Cuándo</th>
+                <th className="px-4 py-2.5">Quién</th>
+                <th className="px-4 py-2.5">Qué</th>
+                <th className="px-4 py-2.5">Proyecto</th>
+                <th className="px-4 py-2.5">Tipo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">
+                    {rows.length === 0
+                      ? "Aún no hay eventos en la bitácora."
+                      : "Ningún evento coincide con los filtros."}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500" title={fmtDateTime(r.created_at)}>
+                      {timeAgo(r.created_at)}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-700">{r.actor_name ?? "—"}</td>
+                    <td className="max-w-[380px] px-4 py-2.5">
+                      <span className="line-clamp-2 text-slate-800" title={r.summary}>{r.summary}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {r.project_name ? (
+                        <a href={`/proyectos/${r.project_id}`} className="text-brand-600 hover:underline">
+                          {r.project_name}
+                        </a>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                      {r.area_name && <div className="text-xs text-slate-400">{r.area_name}</div>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Badge tone="neutral">{AUDIT_TYPE_LABEL[r.entity_type] ?? r.entity_type}</Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 const TABS = [
   { key: "resumen", label: "Resumen", icon: LayoutDashboard },
   { key: "actividad", label: "Actividad", icon: Activity },
+  { key: "auditoria", label: "Auditoría", icon: ScrollText },
   { key: "projects", label: "Proyectos", icon: FolderKanban },
   { key: "tareas", label: "Tareas", icon: ListChecks },
   { key: "users", label: "Usuarios", icon: Users },
@@ -781,6 +902,8 @@ export default function AdminPage() {
         <ResumenTab />
       ) : tab === "actividad" ? (
         <ActividadTab />
+      ) : tab === "auditoria" ? (
+        <AuditoriaTab />
       ) : tab === "projects" ? (
         <ProjectsTab />
       ) : tab === "tareas" ? (

@@ -21,7 +21,7 @@ from app.schemas.code import (
     MergeRequest,
     RestoreRequest,
 )
-from app.services import coderepo
+from app.services import audit, coderepo
 from app.services import projects as projects_svc
 
 router = APIRouter(prefix="/api/projects/{project_id}/code", tags=["code"])
@@ -120,6 +120,14 @@ async def upload(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     except coderepo.CodeRepoError as exc:
         raise _err(exc) from None
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="code",
+        action="uploaded",
+        summary=f"Código: subida de {len(payload)} archivo(s) — {info.get('message', '')}"[:500],
+        actor_id=user.id,
+    )
     return CommitInfo(**info)
 
 
@@ -137,6 +145,14 @@ async def restore(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     except coderepo.CodeRepoError as exc:
         raise _err(exc) from None
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="code",
+        action="restored",
+        summary=f"Código: {info.get('message', 'versión restaurada')}"[:500],
+        actor_id=user.id,
+    )
     return CommitInfo(**info)
 
 
@@ -180,9 +196,18 @@ async def create_branch(
 ) -> dict[str, str]:
     project = await _dev_project(project_id, user, db, edit=True)
     try:
-        return await coderepo.create_branch(project, payload.name)
+        created = await coderepo.create_branch(project, payload.name)
     except coderepo.CodeRepoError as exc:
         raise _err(exc) from None
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="code",
+        action="branch_created",
+        summary=f"Código: borrador creado «{created['name']}»",
+        actor_id=user.id,
+    )
+    return created
 
 
 @router.delete("/branches/{branch}", status_code=status.HTTP_204_NO_CONTENT)
@@ -197,6 +222,14 @@ async def delete_branch(
         await coderepo.delete_branch(project, branch)
     except coderepo.CodeRepoError as exc:
         raise _err(exc) from None
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="code",
+        action="branch_discarded",
+        summary=f"Código: borrador descartado «{branch}»",
+        actor_id=user.id,
+    )
 
 
 @router.get("/branches/{branch}/diff", response_model=DiffResult)
@@ -233,4 +266,12 @@ async def merge(
         ) from None
     except coderepo.CodeRepoError as exc:
         raise _err(exc) from None
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="code",
+        action="published",
+        summary=f"Código: borrador publicado «{payload.branch}»",
+        actor_id=user.id,
+    )
     return CommitInfo(**info)

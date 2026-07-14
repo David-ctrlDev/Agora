@@ -16,10 +16,12 @@ from app.schemas.admin import (
     UserAreasSet,
 )
 from app.schemas.area import AreaCreate, AreaRead
+from app.schemas.audit import GlobalAuditRead
 from app.schemas.catalog import CatalogTermCreate, CatalogTermRead
 from app.schemas.task import TaskSummary
 from app.services import admin as admin_svc
 from app.services import areas as areas_service
+from app.services import audit as audit_svc
 from app.services import catalog as catalog_svc
 from app.services import tasks as tasks_svc
 
@@ -40,6 +42,12 @@ async def activity(limit: int = 10, db: AsyncSession = Depends(get_db)) -> Admin
 async def all_tasks(db: AsyncSession = Depends(get_db)) -> TaskSummary:
     """Resumen de todas las tareas del sistema (a quién, en qué proyecto y área)."""
     return await tasks_svc.task_summary(db, None)
+
+
+@router.get("/audit", response_model=list[GlobalAuditRead])
+async def global_audit(limit: int = 300, db: AsyncSession = Depends(get_db)) -> list[GlobalAuditRead]:
+    """Bitácora global: quién hizo qué, en qué proyecto y cuándo."""
+    return await audit_svc.list_global(db, limit=min(max(limit, 1), 1000))
 
 
 # --- Maestras (proceso / categoría / tipo) ---

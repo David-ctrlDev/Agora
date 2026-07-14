@@ -678,7 +678,7 @@ async def execute_remove_project_member(db: AsyncSession, user: User, params: di
     target = await _resolve_user(db, params.get("person"))
     if target is None:
         return {"ok": False, "error": f"no encontré al usuario «{params.get('person', '')}»."}
-    await projects_svc.remove_member(db, project.id, target.id)
+    await projects_svc.remove_member(db, project.id, target.id, actor=user)
     return {"ok": True, "project": project.name, "person": target.name}
 
 

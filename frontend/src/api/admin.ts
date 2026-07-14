@@ -76,9 +76,23 @@ export interface AdminActivity {
   recent_users: ActivityUser[];
 }
 
+export interface GlobalAuditRow {
+  id: number;
+  entity_type: string;
+  action: string;
+  summary: string;
+  actor_name: string | null;
+  project_id: number;
+  project_name: string | null;
+  area_name: string | null;
+  created_at: string;
+}
+
 export const getAdminStats = () => api.get<AdminStats>("/api/admin/stats");
 export const getAdminActivity = (limit = 10) =>
   api.get<AdminActivity>(`/api/admin/activity?limit=${limit}`);
+export const getAdminAudit = (limit = 300) =>
+  api.get<GlobalAuditRow[]>(`/api/admin/audit?limit=${limit}`);
 export const listAdminUsers = () => api.get<AdminUser[]>("/api/admin/users");
 export const createAdminUser = (payload: {
   email: string;

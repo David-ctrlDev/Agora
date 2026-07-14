@@ -118,4 +118,14 @@ async def delete_task(
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
     await _project_with_access(task.project_id, user, db, edit=True)
+    project_id, title = task.project_id, task.title
     await svc.delete_task(db, task)
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="task",
+        entity_id=task_id,
+        action="deleted",
+        summary=f"Tarea eliminada: {title}",
+        actor_id=user.id,
+    )

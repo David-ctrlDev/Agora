@@ -160,6 +160,17 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
             await coderepo.ensure_repo(project.id)
         except Exception:
             pass
+    from app.services import audit
+
+    await audit.log(
+        db,
+        project_id=project.id,
+        entity_type="project",
+        entity_id=project.id,
+        action="created",
+        summary=f"Proyecto creado: {project.name}",
+        actor_id=user.id,
+    )
     return await to_read(db, project)
 
 
@@ -208,6 +219,9 @@ async def list_members(db: AsyncSession, project_id: int) -> list[ProjectMemberR
     ]
 
 
+_ROLE_LABEL = {"owner": "propietario", "editor": "editor", "viewer": "lector"}
+
+
 async def add_member(
     db: AsyncSession, project_id: int, user_id: int, role: str, actor: User | None = None
 ) -> None:
@@ -218,18 +232,54 @@ async def add_member(
     else:
         db.add(ProjectMember(project_id=project_id, user_id=user_id, role=role))
     await db.commit()
+    if actor is None:
+        return
+    member_user = await db.get(User, user_id)
+    project = await db.get(Project, project_id)
+    if member_user is None or project is None:
+        return
+    # Bitácora: quién agregó/cambió a quién (visible en Auditoría del panel admin).
+    from app.services import audit
+
+    label = _ROLE_LABEL.get(role, role)
+    await audit.log(
+        db,
+        project_id=project_id,
+        entity_type="member",
+        entity_id=user_id,
+        action="added" if is_new else "role_changed",
+        summary=(
+            f"Miembro añadido: {member_user.name} ({label})"
+            if is_new
+            else f"Rol de miembro actualizado: {member_user.name} → {label}"
+        ),
+        actor_id=actor.id,
+    )
     # Avisa al nuevo miembro (in-app + correo del actor). Solo en alta nueva.
-    if is_new and actor is not None and user_id != actor.id:
+    if is_new and user_id != actor.id:
         from app.services import notifications as notif
 
-        member_user = await db.get(User, user_id)
-        project = await db.get(Project, project_id)
-        if member_user is not None and project is not None:
-            await notif.notify_project_member_added(db, actor, member_user, project, role)
+        await notif.notify_project_member_added(db, actor, member_user, project, role)
 
 
-async def remove_member(db: AsyncSession, project_id: int, user_id: int) -> None:
+async def remove_member(
+    db: AsyncSession, project_id: int, user_id: int, actor: User | None = None
+) -> None:
     member = await db.get(ProjectMember, {"project_id": project_id, "user_id": user_id})
-    if member is not None:
-        await db.delete(member)
-        await db.commit()
+    if member is None:
+        return
+    member_user = await db.get(User, user_id)
+    await db.delete(member)
+    await db.commit()
+    if actor is not None and member_user is not None:
+        from app.services import audit
+
+        await audit.log(
+            db,
+            project_id=project_id,
+            entity_type="member",
+            entity_id=user_id,
+            action="removed",
+            summary=f"Miembro retirado: {member_user.name}",
+            actor_id=actor.id,
+        )

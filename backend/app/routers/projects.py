@@ -77,7 +77,22 @@ async def update_project(
                 detail="Solo un administrador del área o el super admin puede cambiar esto",
             )
     old_status = project.status
+    old_dev = project.is_development
     read = await svc.update_project(db, project, payload)
+    if read.is_development != old_dev:
+        await audit.log(
+            db,
+            project_id=project.id,
+            entity_type="project",
+            entity_id=project.id,
+            action="dev_toggled",
+            summary=(
+                "Pestaña Código activada (proyecto de desarrollo)"
+                if read.is_development
+                else "Pestaña Código desactivada"
+            ),
+            actor_id=user.id,
+        )
     if read.status != old_status:
         await audit.log(
             db,
@@ -140,5 +155,5 @@ async def remove_member(
     project = await _accessible_project(project_id, user, db)
     if not await svc.can_edit(db, user, project):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permiso")
-    await svc.remove_member(db, project_id, member_user_id)
+    await svc.remove_member(db, project_id, member_user_id, actor=user)
     return await svc.list_members(db, project_id)
