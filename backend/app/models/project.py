@@ -61,6 +61,12 @@ class Project(Base):
     is_development: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Proyecto padre (vínculo/navegación; el avance de cada uno es propio).
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Levantamiento de requerimientos (texto digitado; los adjuntos van a documentos).
+    requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

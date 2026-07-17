@@ -386,6 +386,53 @@ export default function AnalyticsPage() {
             </Panel>
           </div>
 
+          {/* Ajustes post-entrega (métrica aparte del avance) */}
+          {filtered.some((p) => p.adjustments_total > 0) && (
+            <Panel
+              title="Ajustes (post-entrega)"
+              subtitle="Trabajo posterior a la entrega — no afecta el avance de los proyectos"
+            >
+              {(() => {
+                const withAdj = filtered.filter((p) => p.adjustments_total > 0);
+                const total = withAdj.reduce((s, p) => s + p.adjustments_total, 0);
+                const open = withAdj.reduce((s, p) => s + p.adjustments_open, 0);
+                return (
+                  <div className="grid gap-5 sm:grid-cols-[220px_1fr]">
+                    <div className="space-y-1.5 text-sm text-slate-600">
+                      <div>
+                        <span className="text-3xl font-semibold text-slate-900">{total}</span> ajustes
+                      </div>
+                      <div>
+                        <span className="font-medium text-amber-600">{open} abiertos</span> ·{" "}
+                        <span className="text-emerald-600">{total - open} completados</span>
+                      </div>
+                      <div className="text-xs text-slate-400">{withAdj.length} proyecto(s) con ajustes</div>
+                    </div>
+                    <ul className="space-y-2">
+                      {withAdj
+                        .slice()
+                        .sort((a, b) => b.adjustments_open - a.adjustments_open)
+                        .slice(0, 6)
+                        .map((p) => (
+                          <li key={p.project_id}>
+                            <Link
+                              to={`/proyectos/${p.project_id}`}
+                              className="flex items-center justify-between gap-3 rounded-lg px-1 py-0.5 text-sm transition hover:bg-slate-50"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-slate-700">{p.name}</span>
+                              <span className="shrink-0 text-xs tabular-nums text-slate-500">
+                                {p.adjustments_open} abiertos / {p.adjustments_total}
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+            </Panel>
+          )}
+
           {/* Requiere atención */}
           <Panel title="Requiere atención" subtitle="Proyectos en riesgo, en alerta o con tareas vencidas">
             {attention.length === 0 ? (

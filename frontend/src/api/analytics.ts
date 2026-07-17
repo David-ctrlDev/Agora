@@ -15,6 +15,8 @@ export interface ProjectAnalytics {
   by_status: Record<string, number>;
   by_priority: Record<string, number>;
   health: string;
+  adjustments_total: number;
+  adjustments_open: number;
   due_date: string | null;
   due_in_days: number | null;
   area_name: string | null;
@@ -33,6 +35,9 @@ export interface OverviewTotals {
   completion_pct: number;
   overdue_tasks: number;
   at_risk_projects: number;
+  adjustments_total: number;
+  adjustments_open: number;
+  adjustments_done: number;
 }
 
 export interface AreaStat {
@@ -96,6 +101,7 @@ export const STATUS_META: Record<string, { label: string; color: string }> = {
   todo: { label: "Por hacer", color: "#cbd5e1" },
   in_progress: { label: "En progreso", color: "#0ea5e9" },
   blocked: { label: "Bloqueada", color: "#f59e0b" },
+  approval: { label: "Aprobación", color: "#8b5cf6" },
   done: { label: "Hecha", color: "#10b981" },
 };
 

@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TaskStatus = Literal["todo", "in_progress", "blocked", "done"]
+TaskStatus = Literal["todo", "in_progress", "blocked", "approval", "done"]
 TaskPriority = Literal["low", "medium", "high"]
 
 
@@ -15,6 +15,7 @@ class TaskCreate(BaseModel):
     assignee_id: int | None = None
     due_date: date | None = None
     sprint_id: int | None = None
+    is_adjustment: bool = False  # tarea de ajuste (post-entrega, métricas aparte)
 
 
 class TaskUpdate(BaseModel):
@@ -39,6 +40,7 @@ class TaskRead(BaseModel):
     assignee_id: int | None
     due_date: date | None
     sprint_id: int | None = None
+    is_adjustment: bool = False
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

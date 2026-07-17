@@ -13,7 +13,16 @@ class AreaNotAllowed(Exception):
     """El usuario no pertenece al área del proyecto que intenta crear."""
 
 
-def _to_read(project: Project, area_name: str | None, owner_name: str | None) -> ProjectRead:
+class InvalidParent(Exception):
+    """El proyecto padre no existe o formaría un ciclo (p. ej. su propio hijo)."""
+
+
+def _to_read(
+    project: Project,
+    area_name: str | None,
+    owner_name: str | None,
+    parent_name: str | None = None,
+) -> ProjectRead:
     return ProjectRead(
         id=project.id,
         name=project.name,
@@ -37,6 +46,9 @@ def _to_read(project: Project, area_name: str | None, owner_name: str | None) ->
         benefits=project.benefits,
         change_management=project.change_management,
         is_development=project.is_development,
+        parent_id=project.parent_id,
+        parent_name=parent_name,
+        requirements=project.requirements,
     )
 
 
@@ -69,9 +81,17 @@ async def list_projects(db: AsyncSession, user: User) -> list[ProjectRead]:
             )
         ).scalars().all()
     )
+    # Nombres de proyectos padre (los que no estén en el propio resultado se buscan aparte).
+    names = {p.id: p.name for (p, _a, _o) in rows}
+    missing = {p.parent_id for (p, _a, _o) in rows if p.parent_id and p.parent_id not in names}
+    if missing:
+        extra = (
+            await db.execute(select(Project.id, Project.name).where(Project.id.in_(missing)))
+        ).all()
+        names.update({pid: name for pid, name in extra})
     out: list[ProjectRead] = []
     for (p, area_name, owner_name) in rows:
-        read = _to_read(p, area_name, owner_name)
+        read = _to_read(p, area_name, owner_name, names.get(p.parent_id) if p.parent_id else None)
         read.is_mine = p.owner_id == user.id or p.id in my_member_ids
         out.append(read)
     return out
@@ -114,13 +134,36 @@ async def can_manage(db: AsyncSession, user: User, project: Project) -> bool:
 async def to_read(db: AsyncSession, project: Project) -> ProjectRead:
     area = await db.get(Area, project.area_id)
     owner = await db.get(User, project.owner_id) if project.owner_id else None
-    return _to_read(project, area.name if area else None, owner.name if owner else None)
+    parent = await db.get(Project, project.parent_id) if project.parent_id else None
+    return _to_read(
+        project,
+        area.name if area else None,
+        owner.name if owner else None,
+        parent.name if parent else None,
+    )
+
+
+async def _validate_parent(db: AsyncSession, project_id: int | None, parent_id: int) -> None:
+    """El padre debe existir y no formar un ciclo (ni ser el propio proyecto)."""
+    if project_id is not None and parent_id == project_id:
+        raise InvalidParent()
+    current = await db.get(Project, parent_id)
+    if current is None:
+        raise InvalidParent()
+    hops = 0
+    while current is not None and current.parent_id is not None and hops < 25:
+        if project_id is not None and current.parent_id == project_id:
+            raise InvalidParent()
+        current = await db.get(Project, current.parent_id)
+        hops += 1
 
 
 async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -> ProjectRead:
     area_ids = await get_user_area_ids(db, user)
     if area_ids is not None and payload.area_id not in area_ids:
         raise AreaNotAllowed()
+    if payload.parent_id:
+        await _validate_parent(db, None, payload.parent_id)
     project = Project(
         name=payload.name.strip(),
         description=payload.description or None,
@@ -134,6 +177,7 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
         process=payload.process or None,
         project_type=payload.project_type or None,
         is_development=payload.is_development,
+        parent_id=payload.parent_id or None,
     )
     db.add(project)
     await db.flush()
@@ -176,6 +220,8 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
 
 async def update_project(db: AsyncSession, project: Project, payload: ProjectUpdate) -> ProjectRead:
     data = payload.model_dump(exclude_unset=True)
+    if "parent_id" in data and data["parent_id"]:
+        await _validate_parent(db, project.id, data["parent_id"])
     progress_changed = (
         "progress" in data and data["progress"] is not None and data["progress"] != project.progress
     )

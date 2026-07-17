@@ -16,6 +16,9 @@ class ProjectAnalytics(BaseModel):
     by_status: dict[str, int]
     by_priority: dict[str, int]
     health: str
+    # Ajustes (post-entrega): métricas aparte, no cuentan en el avance.
+    adjustments_total: int = 0
+    adjustments_open: int = 0
     due_date: date | None = None
     due_in_days: int | None = None
     area_name: str | None = None
@@ -34,6 +37,9 @@ class OverviewTotals(BaseModel):
     completion_pct: int
     overdue_tasks: int
     at_risk_projects: int
+    adjustments_total: int = 0
+    adjustments_open: int = 0
+    adjustments_done: int = 0
 
 
 class AreaStat(BaseModel):

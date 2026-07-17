@@ -10,6 +10,7 @@ import {
   deleteProject,
   getProject,
   listMembers,
+  listProjects,
   removeMember,
   updateProject,
 } from "../api/projects";
@@ -22,6 +23,7 @@ import CodePanel from "../components/CodePanel";
 import EconomicsPanel from "../components/EconomicsPanel";
 import GooglePanel from "../components/GooglePanel";
 import KnowledgePanel from "../components/KnowledgePanel";
+import RequirementsPanel from "../components/RequirementsPanel";
 import SprintsPanel from "../components/SprintsPanel";
 import TasksBoard from "../components/TasksBoard";
 import { Badge, Button, Card, Input, PageHeader, Select, Spinner, Textarea } from "../components/ui";
@@ -42,6 +44,7 @@ export default function ProjectDetailPage() {
     queryFn: () => listMembers(projectId),
   });
   const usersQuery = useQuery({ queryKey: ["users"], queryFn: listUsers });
+  const allProjects = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const catProcess = useQuery({ queryKey: ["catalog", "process"], queryFn: () => listCatalog("process") });
   const catCategory = useQuery({ queryKey: ["catalog", "category"], queryFn: () => listCatalog("category") });
   const catType = useQuery({ queryKey: ["catalog", "project_type"], queryFn: () => listCatalog("project_type") });
@@ -84,6 +87,7 @@ export default function ProjectDetailPage() {
     category: "",
     process: "",
     project_type: "",
+    parent: "",
   });
   const [desc, setDesc] = useState("");
   useEffect(() => {
@@ -96,6 +100,7 @@ export default function ProjectDetailPage() {
         category: p.category ?? "",
         process: p.process ?? "",
         project_type: p.project_type ?? "",
+        parent: p.parent_id ? String(p.parent_id) : "",
       });
       setDesc(p.description ?? "");
     }
@@ -109,6 +114,7 @@ export default function ProjectDetailPage() {
         category: plan.category || null,
         process: plan.process || null,
         project_type: plan.project_type || null,
+        parent_id: plan.parent ? Number(plan.parent) : null,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
   });
@@ -134,7 +140,12 @@ export default function ProjectDetailPage() {
 
   const project = projectQuery.data;
   const st = PROJECT_STATUS[project.status] ?? { label: project.status, tone: "neutral" as const };
-  const isOwnerOrAdmin = me.data?.role === "admin" || me.data?.id === project.owner_id;
+  // Gestiona el proyecto: líder/dueño, admin del ÁREA del proyecto o super admin
+  // (el backend valida lo mismo; aquí solo se decide qué controles mostrar).
+  const isAreaAdmin = !!me.data?.areas?.some(
+    (a) => a.id === project.area_id && (a.area_role === "lead" || a.area_role === "admin"),
+  );
+  const isOwnerOrAdmin = !!me.data?.is_superadmin || isAreaAdmin || me.data?.id === project.owner_id;
   const members = membersQuery.data ?? [];
   const canEdit =
     isOwnerOrAdmin ||
@@ -288,6 +299,18 @@ export default function ProjectDetailPage() {
                 <option key={t.id} value={t.name}>{t.name}</option>
               ))}
             </Select>
+            <Select
+              label="Proyecto padre"
+              value={plan.parent}
+              onChange={(e) => setPlan({ ...plan, parent: e.target.value })}
+            >
+              <option value="">— Sin padre —</option>
+              {(allProjects.data ?? [])
+                .filter((p) => p.id !== projectId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+            </Select>
           </div>
           <div className="mt-3 flex items-center gap-3">
             <Button size="sm" onClick={() => savePlan.mutate()} disabled={savePlan.isPending}>
@@ -303,13 +326,66 @@ export default function ProjectDetailPage() {
         </Card>
       )}
 
+      <RequirementsPanel project={project} canEdit={canEdit} />
+
+      {(allProjects.data ?? []).some((p) => p.parent_id === projectId) && (
+        <Card className="p-5">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Subproyectos</h2>
+          <ul className="divide-y divide-slate-100">
+            {(allProjects.data ?? [])
+              .filter((p) => p.parent_id === projectId)
+              .map((p) => (
+                <li key={p.id}>
+                  <Link
+                    to={`/proyectos/${p.id}`}
+                    className="flex items-center justify-between gap-3 py-2 text-sm transition hover:text-brand-700"
+                  >
+                    <span className="truncate font-medium text-slate-800">{p.name}</span>
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+                      {p.progress}%
+                      <Badge tone={(PROJECT_STATUS[p.status]?.tone ?? "neutral") as never}>
+                        {PROJECT_STATUS[p.status]?.label ?? p.status}
+                      </Badge>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        </Card>
+      )}
+
+      {project.parent_id && project.parent_name && (
+        <p className="text-sm text-slate-500">
+          Subproyecto de{" "}
+          <Link to={`/proyectos/${project.parent_id}`} className="font-medium text-brand-600 hover:underline">
+            {project.parent_name}
+          </Link>
+        </p>
+      )}
+
       <AnalyticsPanel projectId={projectId} />
 
       <EconomicsPanel projectId={projectId} canEdit={canEdit} />
 
       <SprintsPanel projectId={projectId} canEdit={canEdit} />
 
-      <TasksBoard projectId={projectId} canEdit={canEdit} users={usersQuery.data ?? []} />
+      <TasksBoard
+        projectId={projectId}
+        canEdit={canEdit}
+        canApprove={isOwnerOrAdmin}
+        users={usersQuery.data ?? []}
+      />
+
+      {project.status === "done" && (
+        <TasksBoard
+          projectId={projectId}
+          canEdit={canEdit}
+          canApprove={isOwnerOrAdmin}
+          adjustments
+          title="Ajustes"
+          users={usersQuery.data ?? []}
+        />
+      )}
 
       <CodePanel project={project} canEdit={canEdit} />
 

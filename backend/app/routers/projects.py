@@ -45,6 +45,11 @@ async def create_project(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="No perteneces a esa área"
         ) from exc
+    except svc.InvalidParent:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Proyecto padre inválido (no existe o formaría un ciclo)",
+        ) from None
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -78,7 +83,13 @@ async def update_project(
             )
     old_status = project.status
     old_dev = project.is_development
-    read = await svc.update_project(db, project, payload)
+    try:
+        read = await svc.update_project(db, project, payload)
+    except svc.InvalidParent:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Proyecto padre inválido (no existe o formaría un ciclo)",
+        ) from None
     if read.is_development != old_dev:
         await audit.log(
             db,

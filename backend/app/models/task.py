@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -27,6 +27,11 @@ class Task(Base):
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     sprint_id: Mapped[int | None] = mapped_column(
         ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # Tarea de AJUSTE (post-entrega): vive en su propio tablero y NO cuenta en el
+    # avance/salud/burndown del proyecto; tiene métricas propias en Analítica.
+    is_adjustment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

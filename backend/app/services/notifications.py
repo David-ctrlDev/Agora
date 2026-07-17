@@ -137,11 +137,17 @@ async def run_detection(db: AsyncSession) -> int:
         overdue = await _count(
             db,
             Task.project_id == project.id,
+            Task.is_adjustment.is_(False),
             Task.status != "done",
             Task.due_date.is_not(None),
             Task.due_date < today,
         )
-        blocked = await _count(db, Task.project_id == project.id, Task.status == "blocked")
+        blocked = await _count(
+            db,
+            Task.project_id == project.id,
+            Task.is_adjustment.is_(False),
+            Task.status == "blocked",
+        )
 
         stale = False
         if project.status == "active" and project.due_date and 0 <= (project.due_date - today).days <= 7:

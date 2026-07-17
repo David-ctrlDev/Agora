@@ -102,6 +102,7 @@ async def overdue_tasks(db: AsyncSession, user: User) -> list[dict[str, Any]]:
             .join(Project, Project.id == Task.project_id)
             .where(
                 Task.project_id.in_(pids),
+                Task.is_adjustment.is_(False),
                 Task.status != "done",
                 Task.due_date.is_not(None),
                 Task.due_date < today,
@@ -204,7 +205,7 @@ async def my_tasks(db: AsyncSession, user: User, limit: int = 25) -> list[dict[s
         await db.execute(
             select(Task, Project.name)
             .join(Project, Project.id == Task.project_id)
-            .where(Task.project_id.in_(pids), Task.assignee_id == user.id, Task.status != "done")
+            .where(Task.project_id.in_(pids), Task.assignee_id == user.id, Task.status != "done", Task.is_adjustment.is_(False))
             .order_by(Task.due_date.is_(None), Task.due_date)
             .limit(limit)
         )
@@ -233,7 +234,7 @@ async def tasks_by_assignee(db: AsyncSession, user: User, person: str, limit: in
         await db.execute(
             select(Task, Project.name)
             .join(Project, Project.id == Task.project_id)
-            .where(Task.project_id.in_(pids), Task.assignee_id == target.id)
+            .where(Task.project_id.in_(pids), Task.assignee_id == target.id, Task.is_adjustment.is_(False))
             .order_by(Task.status, Task.due_date.is_(None), Task.due_date)
             .limit(limit)
         )
@@ -439,7 +440,7 @@ async def query_data(
         ).scalar_one_or_none() or -1
 
     if entity == "tasks":
-        conds = [Task.project_id.in_(pids)]
+        conds = [Task.project_id.in_(pids), Task.is_adjustment.is_(False)]
         if status:
             conds.append(Task.status == status)
         if priority:
@@ -608,7 +609,7 @@ async def recent_created(db: AsyncSession, user: User, limit: int = 20) -> dict[
             select(Task.title, Project.name, User.name, Task.created_at)
             .join(Project, Project.id == Task.project_id)
             .join(User, User.id == Task.assignee_id, isouter=True)
-            .where(Task.project_id.in_(pids))
+            .where(Task.project_id.in_(pids), Task.is_adjustment.is_(False))
             .order_by(Task.created_at.desc())
             .limit(limit)
         )

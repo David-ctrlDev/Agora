@@ -48,10 +48,13 @@ async def tasks_summary(
 
 @router.get("/projects/{project_id}/tasks", response_model=list[TaskRead])
 async def list_tasks(
-    project_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    project_id: int,
+    adjustments: bool = False,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> list[TaskRead]:
     await _project_with_access(project_id, user, db)
-    return await svc.list_project_tasks(db, project_id)
+    return await svc.list_project_tasks(db, project_id, adjustments=adjustments)
 
 
 @router.post(
@@ -63,7 +66,13 @@ async def create_task(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TaskRead:
-    await _project_with_access(project_id, user, db, edit=True)
+    project = await _project_with_access(project_id, user, db, edit=True)
+    # Los AJUSTES solo aplican a proyectos ya terminados (post-entrega).
+    if payload.is_adjustment and project.status != "done":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Los ajustes se registran cuando el proyecto está Terminado",
+        )
     task = await svc.create_task(db, project_id, payload, actor=user)
     await audit.log(
         db,
@@ -87,7 +96,18 @@ async def update_task(
     task = await svc.get_task(db, task_id)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarea no encontrada")
-    await _project_with_access(task.project_id, user, db, edit=True)
+    project = await _project_with_access(task.project_id, user, db, edit=True)
+    # Flujo de aprobación: cualquiera con edición ENVÍA a "approval"; pero pasar a
+    # "done" o sacar una tarea de "approval" solo lo hace quien gestiona el proyecto
+    # (líder/dueño, admin del área o super admin).
+    if payload.status is not None and payload.status != task.status:
+        needs_approver = payload.status == "done" or task.status == "approval"
+        if needs_approver and not await projects_svc.can_manage(db, user, project):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el líder del proyecto (o un admin del área) puede aprobar; "
+                "envía la tarea a Aprobación.",
+            )
     old_status, old_assignee, old_sprint = task.status, task.assignee_id, task.sprint_id
     updated = await svc.update_task(db, task, payload, actor=user)
     changes = []

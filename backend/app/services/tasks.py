@@ -33,6 +33,7 @@ def _to_read(
         assignee_id=task.assignee_id,
         due_date=task.due_date,
         sprint_id=task.sprint_id,
+        is_adjustment=task.is_adjustment,
         completed_at=task.completed_at,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -41,12 +42,14 @@ def _to_read(
     )
 
 
-async def list_project_tasks(db: AsyncSession, project_id: int) -> list[TaskRead]:
+async def list_project_tasks(
+    db: AsyncSession, project_id: int, *, adjustments: bool = False
+) -> list[TaskRead]:
     rows = (
         await db.execute(
             select(Task, User.name)
             .outerjoin(User, User.id == Task.assignee_id)
-            .where(Task.project_id == project_id)
+            .where(Task.project_id == project_id, Task.is_adjustment.is_(adjustments))
             .order_by(Task.created_at)
         )
     ).all()
@@ -74,6 +77,7 @@ async def create_task(
         assignee_id=payload.assignee_id,
         due_date=payload.due_date,
         sprint_id=payload.sprint_id,
+        is_adjustment=payload.is_adjustment,
         completed_at=datetime.now(timezone.utc) if payload.status == "done" else None,
     )
     db.add(task)
@@ -158,6 +162,7 @@ async def task_summary(db: AsyncSession, project_ids: list[int] | None) -> TaskS
         .join(Project, Project.id == Task.project_id)
         .join(Area, Area.id == Project.area_id)
         .outerjoin(assignee, assignee.id == Task.assignee_id)
+        .where(Task.is_adjustment.is_(False))  # los ajustes tienen métricas aparte
     )
     if project_ids is not None:
         stmt = stmt.where(Task.project_id.in_(project_ids))

@@ -19,7 +19,7 @@ from app.schemas.analytics import (
 )
 from app.services import projects as projects_svc
 
-_STATUSES = ["todo", "in_progress", "blocked", "done"]
+_STATUSES = ["todo", "in_progress", "blocked", "approval", "done"]
 _PRIORITIES = ["high", "medium", "low"]
 
 
@@ -72,9 +72,26 @@ def _metrics(project: Project, tasks: list[Task], today: date) -> ProjectAnalyti
 
 async def project_metrics(db: AsyncSession, project: Project) -> ProjectAnalytics:
     tasks = list(
-        (await db.execute(select(Task).where(Task.project_id == project.id))).scalars().all()
+        (
+            await db.execute(
+                select(Task).where(
+                    Task.project_id == project.id, Task.is_adjustment.is_(False)
+                )
+            )
+        ).scalars().all()
     )
-    return _metrics(project, tasks, date.today())
+    metrics = _metrics(project, tasks, date.today())
+    adj = (
+        await db.execute(
+            select(
+                func.count(),
+                func.count().filter(Task.status != "done"),
+            ).where(Task.project_id == project.id, Task.is_adjustment.is_(True))
+        )
+    ).one()
+    metrics.adjustments_total = int(adj[0] or 0)
+    metrics.adjustments_open = int(adj[1] or 0)
+    return metrics
 
 
 async def overview(db: AsyncSession, user: User) -> Overview:
@@ -96,7 +113,13 @@ async def overview(db: AsyncSession, user: User) -> Overview:
         (await db.execute(select(Project).where(Project.id.in_(project_ids)))).scalars().all()
     )
     tasks = list(
-        (await db.execute(select(Task).where(Task.project_id.in_(project_ids)))).scalars().all()
+        (
+            await db.execute(
+                select(Task).where(
+                    Task.project_id.in_(project_ids), Task.is_adjustment.is_(False)
+                )
+            )
+        ).scalars().all()
     )
     today = date.today()
     grouped: dict[int, list[Task]] = {p.id: [] for p in projects}
@@ -108,6 +131,25 @@ async def overview(db: AsyncSession, user: User) -> Overview:
 
     total_tasks = sum(m.total for m in items)
     done_tasks = sum(m.done for m in items)
+
+    # Ajustes (post-entrega): agregado global y por proyecto, aparte del avance.
+    adj_rows = (
+        await db.execute(
+            select(
+                Task.project_id,
+                func.count(),
+                func.count().filter(Task.status != "done"),
+            )
+            .where(Task.project_id.in_(project_ids), Task.is_adjustment.is_(True))
+            .group_by(Task.project_id)
+        )
+    ).all()
+    adj_by_project = {pid: (int(t or 0), int(o or 0)) for pid, t, o in adj_rows}
+    for m in items:
+        m.adjustments_total, m.adjustments_open = adj_by_project.get(m.project_id, (0, 0))
+    adjustments_total = sum(t for t, _ in adj_by_project.values())
+    adjustments_open = sum(o for _, o in adj_by_project.values())
+
     totals = OverviewTotals(
         projects=len(items),
         active_projects=sum(1 for p in projects if p.status == "active"),
@@ -116,6 +158,9 @@ async def overview(db: AsyncSession, user: User) -> Overview:
         completion_pct=round(done_tasks / total_tasks * 100) if total_tasks else 0,
         overdue_tasks=sum(m.overdue for m in items),
         at_risk_projects=sum(1 for m in items if m.health == "en_riesgo"),
+        adjustments_total=adjustments_total,
+        adjustments_open=adjustments_open,
+        adjustments_done=adjustments_total - adjustments_open,
     )
 
     # --- Agregados para el dashboard ---

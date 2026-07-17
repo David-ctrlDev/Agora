@@ -22,13 +22,28 @@ import { Badge, Button, Card, Input, Select, Spinner } from "./ui";
 interface Props {
   projectId: number;
   canEdit: boolean;
+  /** Puede aprobar (pasar a Hecha / sacar de Aprobación): líder, admin de área o super admin. */
+  canApprove?: boolean;
+  /** Tablero de AJUSTES (post-entrega): tareas aparte que no afectan el avance. */
+  adjustments?: boolean;
+  title?: string;
   users: AppUser[];
 }
 
-export default function TasksBoard({ projectId, canEdit, users }: Props) {
+export default function TasksBoard({
+  projectId,
+  canEdit,
+  canApprove = false,
+  adjustments = false,
+  title: boardTitle = "Tareas",
+  users,
+}: Props) {
   const queryClient = useQueryClient();
-  const queryKey = ["project", projectId, "tasks"];
-  const tasksQuery = useQuery({ queryKey, queryFn: () => listProjectTasks(projectId) });
+  const queryKey = ["project", projectId, "tasks", adjustments];
+  const tasksQuery = useQuery({
+    queryKey,
+    queryFn: () => listProjectTasks(projectId, adjustments),
+  });
 
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -77,23 +92,39 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
       priority,
       assignee_id: assigneeId === "" ? null : Number(assigneeId),
       due_date: dueDate || null,
+      is_adjustment: adjustments,
     });
   };
 
   const tasks = tasksQuery.data ?? [];
   const selectedTask = tasks.find((t) => t.id === selectedId) ?? null;
 
+  // Flujo de aprobación: sin permiso de aprobar no se puede pasar a "Hecha" ni
+  // mover una tarea que ya está en Aprobación (el backend también lo valida).
+  const canMove = (task: Task, target: TaskStatus) => {
+    if (canApprove) return true;
+    if (task.status === "approval") return false;
+    return target !== "done";
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Tareas</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">{boardTitle}</h2>
+          {adjustments && (
+            <p className="text-xs text-slate-400">
+              Trabajo post-entrega: no afecta el avance del proyecto (métrica aparte).
+            </p>
+          )}
+        </div>
         {canEdit && (
           <Button
             size="sm"
             variant={showForm ? "secondary" : "primary"}
             onClick={() => setShowForm((v) => !v)}
           >
-            <Plus className="h-4 w-4" /> Nueva tarea
+            <Plus className="h-4 w-4" /> {adjustments ? "Nuevo ajuste" : "Nueva tarea"}
           </Button>
         )}
       </div>
@@ -151,7 +182,7 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
       {tasksQuery.isLoading ? (
         <Spinner label="Cargando tareas…" />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {TASK_STATUS_ORDER.map((statusKey) => {
             const column = tasks.filter((t) => t.status === statusKey);
             const meta = TASK_STATUS[statusKey];
@@ -159,7 +190,8 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
               <div
                 key={statusKey}
                 onDragOver={(e) => {
-                  if (canEdit && dragId != null) {
+                  const dragged = tasks.find((t) => t.id === dragId);
+                  if (canEdit && dragged && canMove(dragged, statusKey)) {
                     e.preventDefault();
                     setOverCol(statusKey);
                   }
@@ -174,7 +206,8 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
                   const id = dragId ?? Number(e.dataTransfer.getData("text/plain"));
                   setOverCol(null);
                   setDragId(null);
-                  if (id && tasks.find((t) => t.id === id)?.status !== statusKey) {
+                  const dragged = tasks.find((t) => t.id === id);
+                  if (id && dragged && dragged.status !== statusKey && canMove(dragged, statusKey)) {
                     update.mutate({ id, status: statusKey });
                   }
                 }}
@@ -226,19 +259,29 @@ export default function TasksBoard({ projectId, canEdit, users }: Props) {
                       </div>
                       {canEdit && (
                         <div className="flex items-center gap-2">
-                          <select
-                            value={t.status}
-                            onChange={(e) =>
-                              update.mutate({ id: t.id, status: e.target.value as TaskStatus })
-                            }
-                            className="h-7 flex-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:border-brand-500 focus:outline-none"
-                          >
-                            {TASK_STATUS_ORDER.map((st) => (
-                              <option key={st} value={st}>
-                                {TASK_STATUS[st].label}
-                              </option>
-                            ))}
-                          </select>
+                          {t.status === "approval" && !canApprove ? (
+                            <span className="flex-1 text-xs italic text-amber-600">
+                              Esperando aprobación del líder
+                            </span>
+                          ) : (
+                            <select
+                              value={t.status}
+                              onChange={(e) =>
+                                update.mutate({ id: t.id, status: e.target.value as TaskStatus })
+                              }
+                              className="h-7 flex-1 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:border-brand-500 focus:outline-none"
+                            >
+                              {TASK_STATUS_ORDER.filter(
+                                (st) => st === t.status || canMove(t, st),
+                              ).map((st) => (
+                                <option key={st} value={st}>
+                                  {st === "approval" && !canApprove
+                                    ? "Enviar a aprobación"
+                                    : TASK_STATUS[st].label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           <button
                             type="button"
                             onClick={() => remove.mutate(t.id)}

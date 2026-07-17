@@ -20,6 +20,7 @@ from app.routers import (
     knowledge,
     notifications,
     projects,
+    requirements,
     sprints,
     tasks,
     users,
@@ -48,6 +49,7 @@ app.include_router(area_admin.router)
 app.include_router(catalog.router)
 app.include_router(code.router)
 app.include_router(costs.router)
+app.include_router(requirements.router)
 
 
 @app.get("/api/health", tags=["health"])

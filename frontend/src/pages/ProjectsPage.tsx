@@ -54,6 +54,7 @@ export default function ProjectsPage() {
   const [processName, setProcessName] = useState("");
   const [projectType, setProjectType] = useState("");
   const [isDevelopment, setIsDevelopment] = useState(false);
+  const [parentId, setParentId] = useState<number | "">("");
 
   const [scope, setScope] = useState<"mine" | "area">("mine");
   const [search, setSearch] = useState("");
@@ -62,6 +63,8 @@ export default function ProjectsPage() {
   const [ownerFilter, setOwnerFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [qYear, setQYear] = useState("");
+  const [qQuarter, setQQuarter] = useState("");
   const [view, setView] = useState<"cards" | "list">(
     () => (localStorage.getItem(VIEW_KEY) as "cards" | "list") || "cards",
   );
@@ -85,6 +88,7 @@ export default function ProjectsPage() {
       setProcessName("");
       setProjectType("");
       setIsDevelopment(false);
+      setParentId("");
     },
   });
 
@@ -102,6 +106,7 @@ export default function ProjectsPage() {
       process: processName || null,
       project_type: projectType || null,
       is_development: isDevelopment,
+      parent_id: parentId === "" ? null : Number(parentId),
     });
   };
 
@@ -112,6 +117,19 @@ export default function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.owner_name).filter((n): n is string => !!n))].sort(),
     [projects],
   );
+
+  // Trimestre: el proyecto cuenta si su rango [inicio→entrega] CRUZA el trimestre
+  // (misma regla del Seguimiento trimestral). Sin fechas => queda fuera del filtro.
+  const inQuarter = (p: Project, year: number, quarter: number) => {
+    const effStart = p.start_date ?? p.due_date;
+    const effEnd = p.due_date ?? p.start_date;
+    if (!effStart || !effEnd) return false;
+    const qStart = `${year}-${String(3 * (quarter - 1) + 1).padStart(2, "0")}-01`;
+    const qEndMonth = 3 * quarter;
+    const lastDay = new Date(year, qEndMonth, 0).getDate();
+    const qEnd = `${year}-${String(qEndMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    return effStart <= qEnd && effEnd >= qStart;
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -125,9 +143,10 @@ export default function ProjectsPage() {
         (!statusFilter || p.status === statusFilter) &&
         (!ownerFilter || p.owner_name === ownerFilter) &&
         (!dateFrom || (p.due_date != null && p.due_date >= dateFrom)) &&
-        (!dateTo || (p.due_date != null && p.due_date <= dateTo)),
+        (!dateTo || (p.due_date != null && p.due_date <= dateTo)) &&
+        (!qYear || !qQuarter || inQuarter(p, Number(qYear), Number(qQuarter))),
     );
-  }, [projects, scope, search, areaFilter, statusFilter, ownerFilter, dateFrom, dateTo]);
+  }, [projects, scope, search, areaFilter, statusFilter, ownerFilter, dateFrom, dateTo, qYear, qQuarter]);
 
   type SortKey =
     | "name"
@@ -248,6 +267,16 @@ export default function ProjectsPage() {
                   <option key={t.id} value={t.name}>{t.name}</option>
                 ))}
               </Select>
+              <Select
+                label="Proyecto padre (opcional)"
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">— Sin padre —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
             </div>
             <Input
               label="Descripción (opcional)"
@@ -366,6 +395,48 @@ export default function ProjectsPage() {
                 setDateTo("");
               }}
               title="Limpiar fechas"
+              className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <span className="hidden sm:inline">Trimestre</span>
+          <select
+            value={qYear}
+            onChange={(e) => setQYear(e.target.value)}
+            title="Año del trimestre"
+            className="h-10 rounded-xl border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-brand-500 focus:outline-none"
+          >
+            <option value="">Año</option>
+            {[0, -1, 1].map((d) => {
+              const y = new Date().getFullYear() + d;
+              return (
+                <option key={y} value={y}>{y}</option>
+              );
+            })}
+          </select>
+          <select
+            value={qQuarter}
+            onChange={(e) => setQQuarter(e.target.value)}
+            title="Trimestre (inicio→entrega que lo cruce)"
+            className="h-10 rounded-xl border border-slate-300 bg-white px-2 text-sm text-slate-600 focus:border-brand-500 focus:outline-none"
+          >
+            <option value="">T…</option>
+            <option value="1">T1 (Ene–Mar)</option>
+            <option value="2">T2 (Abr–Jun)</option>
+            <option value="3">T3 (Jul–Sep)</option>
+            <option value="4">T4 (Oct–Dic)</option>
+          </select>
+          {(qYear || qQuarter) && (
+            <button
+              type="button"
+              onClick={() => {
+                setQYear("");
+                setQQuarter("");
+              }}
+              title="Limpiar trimestre"
               className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
             >
               <X className="h-3.5 w-3.5" />
@@ -496,9 +567,9 @@ export default function ProjectsPage() {
                                 <div className="max-w-[260px] truncate font-medium text-slate-900" title={p.name}>
                                   {p.name}
                                 </div>
-                                {p.initiative && (
+                                {(p.parent_name || p.initiative) && (
                                   <div className="text-[11px] uppercase tracking-wide text-slate-400">
-                                    {p.initiative}
+                                    {p.parent_name ? `↳ ${p.parent_name}` : p.initiative}
                                   </div>
                                 )}
                               </div>

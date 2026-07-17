@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-export type TaskStatus = "todo" | "in_progress" | "blocked" | "done";
+export type TaskStatus = "todo" | "in_progress" | "blocked" | "approval" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 
 type Tone = "neutral" | "brand" | "success" | "warning" | "danger";
@@ -9,10 +9,11 @@ export const TASK_STATUS: Record<string, { label: string; tone: Tone }> = {
   todo: { label: "Por hacer", tone: "neutral" },
   in_progress: { label: "En progreso", tone: "brand" },
   blocked: { label: "Bloqueada", tone: "danger" },
+  approval: { label: "Aprobación", tone: "warning" },
   done: { label: "Hecha", tone: "success" },
 };
 
-export const TASK_STATUS_ORDER = ["todo", "in_progress", "blocked", "done"] as const;
+export const TASK_STATUS_ORDER = ["todo", "in_progress", "blocked", "approval", "done"] as const;
 
 export const TASK_PRIORITY: Record<string, { label: string; tone: Tone }> = {
   low: { label: "Baja", tone: "neutral" },
@@ -30,6 +31,7 @@ export interface Task {
   assignee_id: number | null;
   due_date: string | null;
   sprint_id: number | null;
+  is_adjustment: boolean;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -45,6 +47,7 @@ export interface TaskCreate {
   assignee_id?: number | null;
   due_date?: string | null;
   sprint_id?: number | null;
+  is_adjustment?: boolean;
 }
 
 export interface TaskUpdate {
@@ -57,8 +60,8 @@ export interface TaskUpdate {
   sprint_id?: number | null;
 }
 
-export const listProjectTasks = (projectId: number) =>
-  api.get<Task[]>(`/api/projects/${projectId}/tasks`);
+export const listProjectTasks = (projectId: number, adjustments = false) =>
+  api.get<Task[]>(`/api/projects/${projectId}/tasks?adjustments=${adjustments}`);
 export const createTask = (projectId: number, payload: TaskCreate) =>
   api.post<Task>(`/api/projects/${projectId}/tasks`, payload);
 export const updateTask = (taskId: number, payload: TaskUpdate) =>

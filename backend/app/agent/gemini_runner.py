@@ -220,7 +220,7 @@ _FUNCTION_DECLARATIONS = [
     {"name": "recent_created", "description": "Proyectos y tareas creados más recientemente, con su área/dueño y a quién se asignó cada tarea. Úsala para «qué proyectos o tareas nuevas se han creado», «qué se ha asignado y a quién últimamente» o «novedades recientes».", "parameters": {"type": "object", "properties": {}}},
     {"name": "query_data", "description": "Consulta FLEXIBLE sobre proyectos o tareas (siempre acotada a las áreas del usuario). Es tu herramienta PRINCIPAL para casi cualquier pregunta de datos que no tenga una tool específica: listar/filtrar, contar/agrupar y filtrar por fechas. Pon 'entity' y solo los filtros que apliquen; usa 'group_by' cuando pidan conteos/«cuántos por…». Ejemplos: tareas de una persona (assignee), proyectos de un área (area), tareas vencidas (due_before=hoy), «cuántas tareas por responsable» (entity=tasks, group_by=assignee), «proyectos por estado» (entity=projects, group_by=status), «qué se creó esta semana» (created_after=YYYY-MM-DD).", "parameters": {"type": "object", "properties": {
         "entity": {"type": "string", "enum": ["tasks", "projects"]},
-        "status": {"type": "string", "description": "tasks: todo/in_progress/blocked/done · projects: planned/active/on_hold/done/archived"},
+        "status": {"type": "string", "description": "tasks: todo/in_progress/blocked/approval/done · projects: planned/active/on_hold/done/archived"},
         "assignee": {"type": "string", "description": "tareas: responsable (nombre/correo, o 'sin asignar')"},
         "owner": {"type": "string", "description": "proyectos: dueño (nombre/correo)"},
         "area": {"type": "string", "description": "nombre del área"},
