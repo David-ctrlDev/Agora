@@ -178,6 +178,7 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
         project_type=payload.project_type or None,
         is_development=payload.is_development,
         parent_id=payload.parent_id or None,
+        initiative=payload.initiative or None,
     )
     db.add(project)
     await db.flush()

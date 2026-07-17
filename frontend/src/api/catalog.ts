@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-export type CatalogKind = "process" | "category" | "project_type";
+export type CatalogKind = "process" | "category" | "project_type" | "initiative";
 
 export interface CatalogTerm {
   id: number;
@@ -9,12 +9,13 @@ export interface CatalogTerm {
   is_active: boolean;
 }
 
-export const CATALOG_KINDS: CatalogKind[] = ["process", "category", "project_type"];
+export const CATALOG_KINDS: CatalogKind[] = ["process", "category", "project_type", "initiative"];
 
 export const CATALOG_LABELS: Record<CatalogKind, string> = {
   process: "Procesos",
   category: "Categorías",
   project_type: "Tipos de proyecto",
+  initiative: "Iniciativas",
 };
 
 /** Valores activos de una maestra, para poblar selectores de formularios. */

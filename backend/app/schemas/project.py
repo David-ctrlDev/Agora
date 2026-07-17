@@ -20,6 +20,7 @@ class ProjectCreate(BaseModel):
     project_type: str | None = None
     is_development: bool = False
     parent_id: int | None = None
+    initiative: str | None = None
 
 
 class RoadmapFields(BaseModel):

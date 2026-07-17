@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog_term import CatalogTerm
 
-KINDS = {"process", "category", "project_type"}
+KINDS = {"process", "category", "project_type", "initiative"}
 
 
 class InvalidKind(Exception):

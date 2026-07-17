@@ -57,6 +57,7 @@ export interface ProjectCreate {
   project_type?: string | null;
   is_development?: boolean;
   parent_id?: number | null;
+  initiative?: string | null;
 }
 
 export interface ProjectUpdate extends Partial<RoadmapFields> {

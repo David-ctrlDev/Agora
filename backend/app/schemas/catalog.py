@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
-CATALOG_KINDS = ("process", "category", "project_type")
+CATALOG_KINDS = ("process", "category", "project_type", "initiative")
 
 
 class CatalogTermRead(BaseModel):

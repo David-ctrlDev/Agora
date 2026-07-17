@@ -48,6 +48,7 @@ export default function ProjectDetailPage() {
   const catProcess = useQuery({ queryKey: ["catalog", "process"], queryFn: () => listCatalog("process") });
   const catCategory = useQuery({ queryKey: ["catalog", "category"], queryFn: () => listCatalog("category") });
   const catType = useQuery({ queryKey: ["catalog", "project_type"], queryFn: () => listCatalog("project_type") });
+  const catInitiative = useQuery({ queryKey: ["catalog", "initiative"], queryFn: () => listCatalog("initiative") });
 
   const updateStatus = useMutation({
     mutationFn: (status: ProjectStatus) => updateProject(projectId, { status }),
@@ -87,6 +88,7 @@ export default function ProjectDetailPage() {
     category: "",
     process: "",
     project_type: "",
+    initiative: "",
     parent: "",
   });
   const [desc, setDesc] = useState("");
@@ -100,6 +102,7 @@ export default function ProjectDetailPage() {
         category: p.category ?? "",
         process: p.process ?? "",
         project_type: p.project_type ?? "",
+        initiative: p.initiative ?? "",
         parent: p.parent_id ? String(p.parent_id) : "",
       });
       setDesc(p.description ?? "");
@@ -114,6 +117,7 @@ export default function ProjectDetailPage() {
         category: plan.category || null,
         process: plan.process || null,
         project_type: plan.project_type || null,
+        initiative: plan.initiative || null,
         parent_id: plan.parent ? Number(plan.parent) : null,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["project", projectId] }),
@@ -296,6 +300,16 @@ export default function ProjectDetailPage() {
             <Select label="Tipo" value={plan.project_type} onChange={(e) => setPlan({ ...plan, project_type: e.target.value })}>
               <option value="">— Sin tipo —</option>
               {(catType.data ?? []).map((t) => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
+            </Select>
+            <Select
+              label="Iniciativa"
+              value={plan.initiative}
+              onChange={(e) => setPlan({ ...plan, initiative: e.target.value })}
+            >
+              <option value="">— Sin iniciativa —</option>
+              {(catInitiative.data ?? []).map((t) => (
                 <option key={t.id} value={t.name}>{t.name}</option>
               ))}
             </Select>

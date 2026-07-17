@@ -42,6 +42,7 @@ export default function ProjectsPage() {
   const catProcess = useQuery({ queryKey: ["catalog", "process"], queryFn: () => listCatalog("process") });
   const catCategory = useQuery({ queryKey: ["catalog", "category"], queryFn: () => listCatalog("category") });
   const catType = useQuery({ queryKey: ["catalog", "project_type"], queryFn: () => listCatalog("project_type") });
+  const catInitiative = useQuery({ queryKey: ["catalog", "initiative"], queryFn: () => listCatalog("initiative") });
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -55,6 +56,7 @@ export default function ProjectsPage() {
   const [projectType, setProjectType] = useState("");
   const [isDevelopment, setIsDevelopment] = useState(false);
   const [parentId, setParentId] = useState<number | "">("");
+  const [initiative, setInitiative] = useState("");
 
   const [scope, setScope] = useState<"mine" | "area">("mine");
   const [search, setSearch] = useState("");
@@ -89,6 +91,7 @@ export default function ProjectsPage() {
       setProjectType("");
       setIsDevelopment(false);
       setParentId("");
+      setInitiative("");
     },
   });
 
@@ -107,6 +110,7 @@ export default function ProjectsPage() {
       project_type: projectType || null,
       is_development: isDevelopment,
       parent_id: parentId === "" ? null : Number(parentId),
+      initiative: initiative || null,
     });
   };
 
@@ -264,6 +268,12 @@ export default function ProjectsPage() {
               <Select label="Tipo" value={projectType} onChange={(e) => setProjectType(e.target.value)}>
                 <option value="">— Sin tipo —</option>
                 {(catType.data ?? []).map((t) => (
+                  <option key={t.id} value={t.name}>{t.name}</option>
+                ))}
+              </Select>
+              <Select label="Iniciativa" value={initiative} onChange={(e) => setInitiative(e.target.value)}>
+                <option value="">— Sin iniciativa —</option>
+                {(catInitiative.data ?? []).map((t) => (
                   <option key={t.id} value={t.name}>{t.name}</option>
                 ))}
               </Select>
